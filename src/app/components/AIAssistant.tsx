@@ -74,10 +74,11 @@ export default function AIAssistant({ isOpen, onToggle, balances, geminiApiUrl }
       } else {
         throw new Error("Could not get a valid response from AI.");
       }
-    } catch (error: any) {
+    } catch (error) {
+      const err = error as { message?: string };
       const errorMessage: ConversationMessage = {
         role: 'ai',
-        parts: [{ text: `Error: ${error.message}` }]
+        parts: [{ text: `Error: ${err.message ?? 'Unknown error'}` }]
       };
       setConversation(prev => [...prev, errorMessage]);
     } finally {

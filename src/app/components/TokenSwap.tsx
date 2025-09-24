@@ -220,10 +220,10 @@ export default function TokenSwap({
       await onBalancesRefresh();
     } catch (error) {
       console.error("Swap failed", error);
-      const err: any = error;
-      const code = err?.code || err?.error?.code;
+      const err = error as { code?: number | string; message?: string; error?: { code?: number | string } };
+      const code = err?.code ?? err?.error?.code;
       const isUserRejected = code === 4001 || code === 'ACTION_REJECTED';
-      const message = isUserRejected ? 'Transaction cancelled' : (err?.message || 'Swap failed.');
+      const message = isUserRejected ? 'Transaction cancelled' : (err?.message ?? 'Swap failed.');
       onStatusChange({ message, type: isUserRejected ? 'info' : 'error' });
     } finally {
       setIsSwapping(false);
