@@ -1,0 +1,341 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+
+interface TokenInfo {
+  address: string;
+  decimals: number;
+  coingeckoId: string;
+}
+
+interface Balances {
+  [key: string]: string;
+}
+
+interface Prices {
+  [key: string]: number;
+}
+
+interface TokenSwapProps {
+  isOpen: boolean;
+  onToggle: () => void;
+  signer: ethers.Signer | null;
+  address: string | null;
+  balances: Balances;
+  prices: Prices;
+  tokens: { [key: string]: TokenInfo };
+  nativeSymbol: string;
+  wrappedSymbol: string;
+  uniswapRouterAddress: string;
+  onStatusChange: (status: { message: string; type: string }) => void;
+  onBalancesRefresh: () => void;
+}
+
+const TOKEN_ICONS: Record<string, string> = {
+  WMATIC: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M7 12h10M12 7v10" fill="white"/></svg>`,
+  MATIC: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4.11,8.34,11.3,4.1a2,2,0,0,1,1.4,0l7.19,4.24a2,2,0,0,1,1,1.76v8.4a2,2,0,0,1-1,1.76l-7.19,4.24a2,2,0,0,1-1.4,0L4.11,20.26a2,2,0,0,1-1-1.76V10.1A2,2,0,0,1,4.11,8.34ZM12,12.27,14.24,11a.5.5,0,0,1,.45,0l1.19.68a.5.5,0,0,1,.26.44v2.19a.5.5,0,0,1-.26.44l-1.19.69a.5.5,0,0,1-.45,0L12,16.73,9.76,18a.5.5,0,0,1-.45,0L8.12,17.29a.5.5,0,0,1,.26-.44V14.66a.5.5,0,0,1,.26-.44l1.19-.68A.5.5,0,0,1,9.76,13.56Z"></path></svg>`,
+  WETH: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12.01,2.25,11.87,2.5,6,12.08l5.87,3.42,6.13-3.42ZM12.01,16.58,6,13.16l5.87,8.2,6.13-8.2Z"></path></svg>`,
+  ETH: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l7 10-7 4-7-4 7-10zm0 12l7-4-7 12-7-12 7 4z"/></svg>`,
+  DAI: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2a10,10,0,1,0,10,10A10,10,0,0,0,12,2Zm0,18a8,8,0,1,1,8-8A8,8,0,0,1,12,20ZM12,8a4,4,0,0,0-4,4H6a6,6,0,0,1,6-6Zm0,8a4,4,0,0,0,4-4h2a6,6,0,0,1-6,6Z"></path></svg>`,
+  USDC: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12,2A10,10,0,1,0,22,12,10,10,0,0,0,12,2Zm0,18a8,8,0,1,1,8-8A8,8,0,0,1,12,20Zm-1.83-9.43a3.48,3.48,0,0,0,1.08-.2,2.68,2.68,0,0,0,1-.58,1.49,1.49,0,0,0,.43-1,1.31,1.31,0,0,0-.43-1,2.62,2.62,0,0,0-1-.59,3.58,3.58,0,0,0-1.09-.2,4,4,0,0,0-1.22.2,2.7,2.7,0,0,0-1,.58,1.39,1.39,0,0,0-.42,1v.2H8.33v-.2a3.44,3.44,0,0,1,1-2.5,5.13,5.13,0,0,1,1.94-1.2,6.33,6.33,0,0,1,2.2-.44,5.74,5.74,0,0,1,4.42,1.64,3.38,3.38,0,0,1,1.15,2.72A3.13,3.13,0,0,1,18,12.3a4.77,4.77,0,0,1-2,1.3,7.25,7.25,0,0,1-2.51.48,4.1,4.1,0,0,0-1.22-.2,3.53,3.53,0,0,0-1.09.2,2.62,2.62,0,0,0-1,.59,1.31,1.31,0,0,1-.43,1,1.49,1.49,0,0,0,.43,1,2.68,2.68,0,0,0,1,.58,3.48,3.48,0,0,0,1.08.2,3.92,3.92,0,0,0,1.22-.2,2.7,2.7,0,0,0,1-.58,1.39,1.39,0,0,0,.42-1v-.2h1.17v.2a3.44,3.44,0,0,1-1,2.5,5.13,5.13,0,0,1-1.94,1.2,6.33,6.33,0,0,1-2.2.44A5.55,5.55,0,0,1,6.5,16.5,3.47,3.47,0,0,1,5.33,13.8a3.13,3.13,0,0,1,1.17-2.73,4.77,4.77,0,0,1,2-1.3A7.25,7.25,0,0,1,11,9.28,3.67,3.67,0,0,0,10.17,10.57Z"></path></svg>`,
+  POL: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M8 12l2-2 2 2-2 2-2-2zm4-4l2-2 2 2-2 2-2-2z" fill="white"/></svg>`
+};
+
+export default function TokenSwap({ 
+  isOpen, 
+  onToggle, 
+  signer, 
+  address, 
+  balances, 
+  prices, 
+  tokens, 
+  nativeSymbol,
+  wrappedSymbol,
+  uniswapRouterAddress, 
+  onStatusChange, 
+  onBalancesRefresh 
+}: TokenSwapProps) {
+  const [fromToken, setFromToken] = useState(nativeSymbol);
+  const [toToken, setToToken] = useState(wrappedSymbol);
+  const [fromAmount, setFromAmount] = useState('');
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [quote, setQuote] = useState('');
+  const [isQuoteLoading, setIsQuoteLoading] = useState(false);
+  const [slippage, setSlippage] = useState('0.5');
+
+  const getQuote = async () => {
+    if (!address || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken === toToken) {
+      setQuote('');
+      return;
+    }
+
+    setIsQuoteLoading(true);
+
+    try {
+      // Instant quote for native <-> wrapped (1:1)
+      if ((fromToken === nativeSymbol && toToken === wrappedSymbol) || (fromToken === wrappedSymbol && toToken === nativeSymbol)) {
+        setQuote(parseFloat(fromAmount).toString());
+        return;
+      }
+
+      const provider = new ethers.providers.Web3Provider((window as any).ethereum);
+      const router = new ethers.Contract(
+        uniswapRouterAddress,
+        ['function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)'],
+        provider
+      );
+
+      const amountIn = ethers.utils.parseUnits(
+        fromAmount,
+        fromToken === nativeSymbol ? 18 : tokens[fromToken].decimals
+      );
+
+      const path = [
+        fromToken === nativeSymbol ? tokens[wrappedSymbol].address : tokens[fromToken].address,
+        toToken === nativeSymbol ? tokens[wrappedSymbol].address : tokens[toToken].address
+      ];
+
+      if (path[0].toLowerCase() === path[1].toLowerCase()) {
+        setQuote(fromAmount);
+        return;
+      }
+
+      const amounts = await router.getAmountsOut(amountIn, path);
+      const amountOut = ethers.utils.formatUnits(
+        amounts[1],
+        toToken === nativeSymbol ? 18 : tokens[toToken].decimals
+      );
+
+      setQuote(parseFloat(amountOut).toFixed(5));
+    } catch (err) {
+      console.error("Quote error:", err);
+      setQuote('');
+      onStatusChange({ message: 'Could not fetch a quote for this pair.', type: 'error' });
+    } finally {
+      setIsQuoteLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(getQuote, 500);
+    return () => clearTimeout(timeoutId);
+  }, [fromAmount, fromToken, toToken, address]);
+
+  const handleSwap = async () => {
+    if (!signer || !fromAmount || parseFloat(fromAmount) <= 0 || !quote) {
+      onStatusChange({ message: 'Invalid amount or quote.', type: 'error' });
+      return;
+    }
+
+    setIsSwapping(true);
+    onStatusChange({ message: 'Initiating swap...', type: 'info' });
+
+    try {
+      // Handle native <-> wrapped wrapping without router
+      if ((fromToken === nativeSymbol && toToken === wrappedSymbol) || (fromToken === wrappedSymbol && toToken === nativeSymbol)) {
+        const wmatic = new ethers.Contract(
+          tokens[wrappedSymbol].address,
+          [
+            'function deposit() public payable',
+            'function withdraw(uint wad) public'
+          ],
+          signer
+        );
+
+        if (fromToken === nativeSymbol) {
+          const amountIn = ethers.utils.parseEther(fromAmount);
+          const tx = await wmatic.deposit({ value: amountIn });
+          await tx.wait();
+        } else {
+          const amountIn = ethers.utils.parseUnits(fromAmount, tokens[wrappedSymbol].decimals);
+          const tx = await wmatic.withdraw(amountIn);
+          await tx.wait();
+        }
+      } else {
+        // Safety: ensure router address is a contract to avoid sending funds to an EOA
+        const onchainProvider = signer.provider as ethers.providers.Provider;
+        const routerCode = await onchainProvider.getCode(uniswapRouterAddress);
+        if (!routerCode || routerCode === '0x') {
+          throw new Error('Router address has no code on this network. Provide a valid DEX router.');
+        }
+
+        const router = new ethers.Contract(
+        uniswapRouterAddress,
+        [
+          'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable',
+          'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
+          'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
+          'function approve(address spender, uint256 amount) external returns (bool)'
+        ],
+        signer
+        );
+
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+        const slippageTolerance = parseFloat(slippage) || 0.5;
+        const slippageAmount = (parseFloat(quote) * slippageTolerance) / 100;
+        const minAmountOut = parseFloat(quote) - slippageAmount;
+
+        if (fromToken === nativeSymbol) {
+          const amountIn = ethers.utils.parseEther(fromAmount);
+          const path = [tokens[wrappedSymbol].address, tokens[toToken].address];
+          const amountOutMin = ethers.utils.parseUnits(
+            minAmountOut.toFixed(tokens[toToken].decimals),
+            tokens[toToken].decimals
+          );
+
+          const tx = await router.swapExactETHForTokens(amountOutMin, path, address, deadline, {
+            value: amountIn
+          });
+          await tx.wait();
+        } else {
+          const fromTokenContract = new ethers.Contract(
+            tokens[fromToken].address,
+            ['function approve(address spender, uint256 amount) external returns (bool)'],
+            signer
+          );
+
+          const amountIn = ethers.utils.parseUnits(fromAmount, tokens[fromToken].decimals);
+          const approveTx = await fromTokenContract.approve(uniswapRouterAddress, amountIn);
+          await approveTx.wait();
+
+          if (toToken === nativeSymbol) {
+            const path = [tokens[fromToken].address, tokens[wrappedSymbol].address];
+            const amountOutMin = ethers.utils.parseUnits(minAmountOut.toFixed(18), 18);
+            const tx = await router.swapExactTokensForETH(amountIn, amountOutMin, path, address, deadline);
+            await tx.wait();
+          } else {
+            const path = [tokens[fromToken].address, tokens[toToken].address];
+            const amountOutMin = ethers.utils.parseUnits(
+              minAmountOut.toFixed(tokens[toToken].decimals),
+              tokens[toToken].decimals
+            );
+            const tx = await router.swapExactTokensForTokens(amountIn, amountOutMin, path, address, deadline);
+            await tx.wait();
+          }
+        }
+      }
+
+      onStatusChange({ message: 'Swap successful!', type: 'success' });
+      await onBalancesRefresh();
+    } catch (error) {
+      console.error("Swap failed", error);
+      const err: any = error;
+      const code = err?.code || err?.error?.code;
+      const isUserRejected = code === 4001 || code === 'ACTION_REJECTED';
+      const message = isUserRejected ? 'Transaction cancelled' : (err?.message || 'Swap failed.');
+      onStatusChange({ message, type: isUserRejected ? 'info' : 'error' });
+    } finally {
+      setIsSwapping(false);
+      setFromAmount('');
+      setQuote('');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg mb-5 border-4 border-black">
+      <div 
+        className="p-4 cursor-pointer flex justify-between items-center text-xl font-bold"
+        onClick={onToggle}
+      >
+        <span>Swap Tokens</span>
+        <span className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
+          ▼
+        </span>
+      </div>
+      <div className={`overflow-hidden will-change-[max-height] transition-[max-height] ease-in-out duration-300 ${isOpen ? 'max-h-[1000px]' : 'max-h-0'}`}>
+        <div className="px-4 pb-4">
+          <div className="flex justify-end items-center gap-2 text-sm mb-3">
+            <span>Slippage:</span>
+            <input
+              type="number"
+              value={slippage}
+              onChange={e => setSlippage(e.target.value)}
+              step="0.1"
+              min="0"
+              className="w-10 bg-gray-100 border-4 border-black text-black rounded px-1 py-1 text-center font-mono"
+            />
+            <span>%</span>
+          </div>
+
+          <div className="bg-white rounded-lg p-3 border-4 border-black mb-2">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>You Pay</span>
+              <span>Balance: {fromToken === nativeSymbol ? (balances[nativeSymbol] || '0.0000') : (balances[fromToken] || '0.0000')}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <input
+                type="number"
+                placeholder="0.0"
+                value={fromAmount}
+                onChange={(e) => setFromAmount(e.target.value)}
+                className="text-2xl bg-transparent border-none text-black outline-none w-full p-0 font-mono"
+              />
+              <div className="flex items-center gap-3 bg-gray-100 border-4 border-black px-4 py-3 rounded-lg cursor-pointer relative">
+                <div 
+                  className="w-8 h-8" 
+                  dangerouslySetInnerHTML={{ __html: TOKEN_ICONS[fromToken] }} 
+                />
+                <select
+                  className="absolute inset-0 opacity-0 cursor-pointer text-xl"
+                  value={fromToken}
+                  onChange={(e) => setFromToken(e.target.value)}
+                >
+                  <option className="font-bold text-xl text-blue" value={nativeSymbol}>{nativeSymbol}</option>
+                  {Object.keys(tokens).map(t => (
+                    <option className="font-bold text-xl text-blue" key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <span className="font-bold text-xl text-blue">{fromToken}</span>
+              </div>
+            </div>
+            <div className="text-lg text-gray-600 mt-1 h-4">
+              {fromAmount && prices[fromToken] ? `$${(parseFloat(fromAmount) * prices[fromToken]).toFixed(2)}` : ''}
+            </div>
+          </div>
+
+          <div className="text-center text-2xl text-black my-2 relative z-10">↓</div>
+
+          <div className="bg-white rounded-lg p-3 border-4 border-black mb-4">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>You Receive (Simulated)</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="text-2xl text-gray-600 text-left">
+                {isQuoteLoading ? '...' : (quote || '0.0')}
+              </div>
+              <div className="flex items-center gap-3 bg-gray-100 border-4 border-black px-4 py-3 rounded-lg cursor-pointer relative">
+                <div 
+                  className="w-8 h-8" 
+                  dangerouslySetInnerHTML={{ __html: TOKEN_ICONS[toToken] }} 
+                />
+                <select
+                  className="absolute inset-0 opacity-0 cursor-pointer text-xl"
+                  value={toToken}
+                  onChange={(e) => setToToken(e.target.value)}
+                >
+                  {Object.keys(tokens).map(t => (
+                    <option className="font-bold text-xl text-blue" key={t} value={t}>{t}</option>
+                  ))}
+                  <option className="font-bold text-xl text-blue" value={nativeSymbol}>{nativeSymbol}</option>
+                </select>
+                <span className="font-bold text-xl text-blue">{toToken}</span>
+              </div>
+            </div>
+            <div className="text-sm text-gray-600 mt-1 h-4">
+              {quote && prices[toToken] ? `$${(parseFloat(quote) * prices[toToken]).toFixed(2)}` : ''}
+            </div>
+          </div>
+
+          <button
+            className="w-full py-4 px-6 rounded-lg border-4 border-black bg-cyan-400 text-black font-bold text-lg cursor-pointer transition-all duration-200 hover:shadow-lg hover:transform hover:translate-x-1 hover:translate-y-1 active:shadow-sm active:transform active:translate-x-2 active:translate-y-2 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none"
+            onClick={handleSwap}
+            disabled={isSwapping || isQuoteLoading || !fromAmount || parseFloat(fromAmount) <= 0}
+          >
+            {isSwapping ? 'Swapping...' : 'Swap'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

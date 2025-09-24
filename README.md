@@ -1,36 +1,136 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Web3 Copilot 🚀
+
+A comprehensive Web3 dashboard built with Next.js, featuring wallet connection, portfolio management, AI assistance, and token swapping capabilities.
+
+## Features
+
+- 🔗 **Wallet Connection**: Connect to MetaMask and switch to Polygon Amoy testnet
+- 💼 **Portfolio Overview**: View your token balances with real-time USD values
+- 🤖 **AI Assistant**: Chat with an AI that understands your portfolio and provides insights
+- 🔄 **Token Swapping**: Swap tokens using Uniswap V2 on Polygon Amoy testnet
+- 🎨 **Modern UI**: Neobrutalist design with smooth animations
+
+## Tech Stack
+
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Styling**: Tailwind CSS with custom neobrutalist design
+- **Blockchain**: Ethers.js v5, MetaMask integration
+- **AI**: Google Gemini API for portfolio assistance
+- **Data**: Alchemy API for token balances, CoinGecko for prices
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ 
+- MetaMask browser extension
+- Alchemy API key
+- Google Gemini API key
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <your-repo-url>
+cd web3-copilot
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up environment variables:
+Create a `.env.local` file in the root directory:
+```env
+NEXT_PUBLIC_ALCHEMY_API_KEY=your_alchemy_api_key_here
+NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Get your API keys:
+- **Alchemy**: Sign up at [alchemy.com](https://www.alchemy.com/) and create a new app for Polygon Amoy testnet
+- **Gemini**: Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-## Learn More
+5. Run the development server:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+6. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Usage
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Wallet Connection
+1. Click "Connect Wallet" to connect your MetaMask
+2. The app will automatically switch to Polygon Amoy testnet
+3. Once connected, you'll see your wallet address and portfolio
 
-## Deploy on Vercel
+### Portfolio Overview
+- View your MATIC, WETH, DAI, and USDC balances
+- See real-time USD values for each token
+- Balances are fetched from the blockchain using Alchemy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### AI Assistant
+- Ask questions about your portfolio
+- Get insights and recommendations
+- The AI understands your current holdings and can provide personalized advice
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Token Swapping
+- Select tokens to swap from and to
+- Enter the amount you want to swap
+- Adjust slippage tolerance if needed
+- Execute swaps directly through Uniswap V2
+
+## Supported Networks
+
+- **Polygon Amoy Testnet** (Chain ID: 80002)
+- **Testnet Tokens**: WETH, DAI, USDC
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── components/
+│   │   ├── Web3Copilot.tsx      # Main application component
+│   │   ├── BackgroundAnimation.tsx
+│   │   ├── PortfolioOverview.tsx
+│   │   ├── AIAssistant.tsx
+│   │   └── TokenSwap.tsx
+│   ├── globals.css              # Global styles and animations
+│   ├── layout.tsx
+│   └── page.tsx
+```
+
+## Customization
+
+### Adding New Tokens
+To add support for new tokens, update the `TOKENS` object in `Web3Copilot.tsx`:
+
+```typescript
+const TOKENS = {
+  'NEW_TOKEN': { 
+    address: '0x...', 
+    decimals: 18, 
+    coingeckoId: 'token-id' 
+  }
+};
+```
+
+### Styling
+The app uses a neobrutalist design system with custom CSS variables. Modify `globals.css` to change colors and animations.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details
+
+## Support
+
+For issues and questions, please open an issue on GitHub or contact the development team.
