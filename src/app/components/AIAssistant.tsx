@@ -16,16 +16,10 @@ interface AIAssistantProps {
   onToggle: () => void;
   balances: Balances;
   geminiApiUrl: string;
-<<<<<<< HEAD
   networkName: string;
 }
 
 export default function AIAssistant({ isOpen, onToggle, balances, geminiApiUrl, networkName }: AIAssistantProps) {
-=======
-}
-
-export default function AIAssistant({ isOpen, onToggle, balances, geminiApiUrl }: AIAssistantProps) {
->>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
   const [userInput, setUserInput] = useState('');
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -51,11 +45,7 @@ export default function AIAssistant({ isOpen, onToggle, balances, geminiApiUrl }
     setIsAiLoading(true);
 
     const portfolioData = JSON.stringify(balances, null, 2);
-<<<<<<< HEAD
     const systemPrompt = `You are "Web3 Copilot," an expert AI crypto portfolio assistant. Your persona is helpful and concise. The user has connected their wallet on the ${networkName} network. Their current portfolio is: ${portfolioData}. Answer their questions and provide actionable insights about their holdings.`;
-=======
-    const systemPrompt = `You are "Web3 Copilot," an expert AI crypto portfolio assistant. Your persona is helpful and concise. The user has connected their wallet on the Polygon Amoy testnet. Their current portfolio is: ${portfolioData}. Answer their questions and provide actionable insights about their holdings.`;
->>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
 
     const history = [...conversation, newUserMessage].map(msg => ({
       role: msg.role === 'ai' ? 'model' : 'user',
@@ -85,18 +75,10 @@ export default function AIAssistant({ isOpen, onToggle, balances, geminiApiUrl }
       } else {
         throw new Error("Could not get a valid response from AI.");
       }
-<<<<<<< HEAD
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage: ConversationMessage = {
         role: 'ai',
-        parts: [{ text: `Error: ${error.message}` }]
-=======
-    } catch (error) {
-      const err = error as { message?: string };
-      const errorMessage: ConversationMessage = {
-        role: 'ai',
-        parts: [{ text: `Error: ${err.message ?? 'Unknown error'}` }]
->>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
+        parts: [{ text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }]
       };
       setConversation(prev => [...prev, errorMessage]);
     } finally {

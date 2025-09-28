@@ -1,10 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-<<<<<<< HEAD
 import { useEffect, useState } from 'react';
-=======
->>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
 
 // Colorful, friendly background for the Connect Wallet page.
 // Shows soft gradients and falling crypto tokens.
@@ -82,7 +79,6 @@ export default function ConnectBackground() {
     )
   ];
 
-<<<<<<< HEAD
   // Create many falling tokens after mount to avoid SSR randomness -> hydration mismatch
   type FloatSpec = {
     left: string;
@@ -108,18 +104,6 @@ export default function ConnectBackground() {
     });
     setFloats(generated);
   }, []);
-=======
-  // Create many falling tokens with mouse interaction
-  const floats = Array.from({ length: 80 }).map((_, i) => {
-    const left = `${Math.random() * 80 + 5}%`;
-    const top = `${Math.random() * 20 - 20}%`; // Start above viewport
-    const delay = Math.random() * 2;
-    const fallSpeed = 8 + Math.random() * 12;
-    const size = 32 + Math.round(Math.random() * 24);
-    const sway = Math.random() * 40 + 20;
-    return { left, top, delay, fallSpeed, size, sway, iconIndex: i % icons.length };
-  });
->>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
 
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 50%, #81d4fa 100%)' }}>
