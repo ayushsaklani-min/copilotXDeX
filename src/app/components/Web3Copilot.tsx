@@ -27,13 +27,43 @@ interface ConversationMessage {
   parts: Array<{ text: string }>;
 }
 
+<<<<<<< HEAD
+=======
+// Minimal token config shape based on NETWORKS constant
+type TokenConfig = {
+  address: string;
+  decimals: number;
+  coingeckoId: string;
+};
+
+// Alchemy token balance response item
+interface AlchemyTokenBalance {
+  contractAddress: string;
+  tokenBalance: string | null;
+  error?: unknown;
+}
+
+// Narrow and return an EIP-1193 external provider for ethers.js
+const getExternalProvider = (): ethers.providers.ExternalProvider => {
+  const maybeWindow = window as unknown as { ethereum?: unknown };
+  if (!maybeWindow.ethereum || typeof maybeWindow.ethereum !== 'object') {
+    throw new Error('No injected Ethereum provider found');
+  }
+  return maybeWindow.ethereum as ethers.providers.ExternalProvider;
+};
+
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
 const AMOY_CHAIN_ID = '0x13882';
 const SEPOLIA_CHAIN_ID = '0xaa36a7';
 // Allow per-network keys; fall back to a single shared key if provided
 const ALCHEMY_API_KEY_SHARED = '';
 const ALCHEMY_API_KEY_AMOY = 'cWLAkUnYYRdZ041Gea_01';
 const ALCHEMY_API_KEY_SEPOLIA = 'GcHN5LnPwkFGcPWhGb-qc';
+<<<<<<< HEAD
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyDl9pqcEoAg1pNUyckWPurzyxiTLhEWt8w';
+=======
+const GEMINI_API_KEY = 'AIzaSyDl9pqcEoAg1pNUyckWPurzyxiTLhEWt8w';
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 // Network configuration for Polygon Amoy and Ethereum Sepolia
 const NETWORKS = {
@@ -133,13 +163,22 @@ export default function Web3Copilot() {
   const switchNetwork = async (target: NetworkKey) => {
     try {
       setStatus({ message: '', type: '' });
+<<<<<<< HEAD
       const provider = new ethers.providers.Web3Provider((window as any).ethereum, 'any');
       await (window as any).ethereum.request({
+=======
+      const provider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
+      await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: NETWORKS[target].chainIdHex }]
       });
       // keep the existing address; just rebind the signer to new provider
+<<<<<<< HEAD
       const newProvider = new ethers.providers.Web3Provider((window as any).ethereum, 'any');
+=======
+      const newProvider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
       const newSigner = newProvider.getSigner();
       setSigner(newSigner);
       const userAddress = await newSigner.getAddress();
@@ -180,18 +219,30 @@ export default function Web3Copilot() {
     setStatus({ message: '', type: '' });
     // fire rocket animation immediately
     setLaunchId(prev => prev + 1);
+<<<<<<< HEAD
     if (typeof (window as any).ethereum === 'undefined') {
+=======
+    if (typeof (window as unknown as { ethereum?: unknown }).ethereum === 'undefined') {
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
       setStatus({ message: 'MetaMask is not installed!', type: 'error' });
       return;
     }
 
     try {
+<<<<<<< HEAD
       const web3Provider = new ethers.providers.Web3Provider((window as any).ethereum, 'any');
+=======
+      const web3Provider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
       await web3Provider.send("eth_requestAccounts", []);
       const { chainId } = await web3Provider.getNetwork();
       // If not on Amoy or Sepolia, prompt switch to Amoy by default
       if (chainId !== NETWORKS.amoy.chainIdDec && chainId !== NETWORKS.sepolia.chainIdDec) {
+<<<<<<< HEAD
         await (window as any).ethereum.request({
+=======
+        await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
           method: 'wallet_switchEthereumChain',
           params: [{ chainId: AMOY_CHAIN_ID }]
         });
@@ -249,6 +300,7 @@ export default function Web3Copilot() {
         throw new Error(`Alchemy RPC error on ${net.name}: ${data.error.message}`);
       }
 
+<<<<<<< HEAD
       const tokenData = data.result.tokenBalances;
       const tokenSymbolMap = Object.entries(net.tokens).reduce((acc, [symbol, token]) => {
         acc[token.address.toLowerCase()] = { symbol, ...token };
@@ -259,6 +311,21 @@ export default function Web3Copilot() {
         const tokenInfo = tokenSymbolMap[token.contractAddress.toLowerCase()];
         if (tokenInfo && token.tokenBalance) {
           const balance = ethers.utils.formatUnits(token.tokenBalance, tokenInfo.decimals);
+=======
+      const tokenData: AlchemyTokenBalance[] = data.result.tokenBalances as AlchemyTokenBalance[];
+      const tokenSymbolMap: Record<string, { symbol: string } & TokenConfig> = Object.entries(net.tokens).reduce(
+        (acc, [symbol, token]) => {
+          acc[token.address.toLowerCase()] = { symbol, ...(token as TokenConfig) };
+          return acc;
+        },
+        {} as Record<string, { symbol: string } & TokenConfig>
+      );
+
+      tokenData.forEach((tokenItem) => {
+        const tokenInfo = tokenSymbolMap[tokenItem.contractAddress.toLowerCase()];
+        if (tokenInfo && tokenItem.tokenBalance) {
+          const balance = ethers.utils.formatUnits(tokenItem.tokenBalance, tokenInfo.decimals);
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
           newBalances[tokenInfo.symbol] = parseFloat(balance).toFixed(4);
         }
       });
@@ -420,7 +487,10 @@ export default function Web3Copilot() {
               onToggle={() => handleToggleSection('ai')}
               balances={balances}
               geminiApiUrl={GEMINI_API_URL}
+<<<<<<< HEAD
               networkName={NETWORKS[networkKey].name}
+=======
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
             />
 
             <TokenSwap

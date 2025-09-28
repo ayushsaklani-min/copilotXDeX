@@ -32,6 +32,18 @@ interface TokenSwapProps {
   onBalancesRefresh: () => void;
 }
 
+<<<<<<< HEAD
+=======
+// Narrow and return an EIP-1193 external provider for ethers.js
+const getExternalProvider = (): ethers.providers.ExternalProvider => {
+  const maybeWindow = window as unknown as { ethereum?: unknown };
+  if (!maybeWindow.ethereum || typeof maybeWindow.ethereum !== 'object') {
+    throw new Error('No injected Ethereum provider found');
+  }
+  return maybeWindow.ethereum as ethers.providers.ExternalProvider;
+};
+
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
 const TOKEN_ICONS: Record<string, string> = {
   WMATIC: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M7 12h10M12 7v10" fill="white"/></svg>`,
   MATIC: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4.11,8.34,11.3,4.1a2,2,0,0,1,1.4,0l7.19,4.24a2,2,0,0,1,1,1.76v8.4a2,2,0,0,1-1,1.76l-7.19,4.24a2,2,0,0,1-1.4,0L4.11,20.26a2,2,0,0,1-1-1.76V10.1A2,2,0,0,1,4.11,8.34ZM12,12.27,14.24,11a.5.5,0,0,1,.45,0l1.19.68a.5.5,0,0,1,.26.44v2.19a.5.5,0,0,1-.26.44l-1.19.69a.5.5,0,0,1-.45,0L12,16.73,9.76,18a.5.5,0,0,1-.45,0L8.12,17.29a.5.5,0,0,1,.26-.44V14.66a.5.5,0,0,1,.26-.44l1.19-.68A.5.5,0,0,1,9.76,13.56Z"></path></svg>`,
@@ -79,7 +91,11 @@ export default function TokenSwap({
         return;
       }
 
+<<<<<<< HEAD
       const provider = new ethers.providers.Web3Provider((window as any).ethereum);
+=======
+      const provider = new ethers.providers.Web3Provider(getExternalProvider());
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
       const router = new ethers.Contract(
         uniswapRouterAddress,
         ['function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)'],
@@ -220,10 +236,17 @@ export default function TokenSwap({
       await onBalancesRefresh();
     } catch (error) {
       console.error("Swap failed", error);
+<<<<<<< HEAD
       const err: any = error;
       const code = err?.code || err?.error?.code;
       const isUserRejected = code === 4001 || code === 'ACTION_REJECTED';
       const message = isUserRejected ? 'Transaction cancelled' : (err?.message || 'Swap failed.');
+=======
+      const err = error as { code?: number | string; message?: string; error?: { code?: number | string } };
+      const code = err?.code ?? err?.error?.code;
+      const isUserRejected = code === 4001 || code === 'ACTION_REJECTED';
+      const message = isUserRejected ? 'Transaction cancelled' : (err?.message ?? 'Swap failed.');
+>>>>>>> 458fb41f41d68cb64a7a7afa90d1eea8c979350d
       onStatusChange({ message, type: isUserRejected ? 'info' : 'error' });
     } finally {
       setIsSwapping(false);
