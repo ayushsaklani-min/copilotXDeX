@@ -57,7 +57,7 @@ const ALCHEMY_API_KEY_SHARED = '';
 const ALCHEMY_API_KEY_AMOY = 'cWLAkUnYYRdZ041Gea_01';
 const ALCHEMY_API_KEY_SEPOLIA = 'GcHN5LnPwkFGcPWhGb-qc';
 const GEMINI_API_KEY = 'AIzaSyDl9pqcEoAg1pNUyckWPurzyxiTLhEWt8w';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 // Network configuration for Polygon Amoy and Ethereum Sepolia
 const NETWORKS = {
   amoy: {
