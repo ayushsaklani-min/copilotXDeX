@@ -163,19 +163,21 @@ export default function Web3Copilot() {
       // keep the existing address; just rebind the signer to new provider
       const newProvider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
       const newSigner = newProvider.getSigner();
-      setSigner(newSigner);
       const userAddress = await newSigner.getAddress();
+      setSigner(newSigner);
       setAddress(userAddress);
       setNetworkKey(target);
-      await fetchPrices();
-      await fetchBalances();
+      // Immediately refresh using the new context to avoid stale state
+      await fetchPrices(target);
+      await fetchBalances({ signerOverride: newSigner, addressOverride: userAddress, networkOverride: target });
     } catch (e) {
       setStatus({ message: 'Network switch failed or was rejected.', type: 'error' });
     }
   };
 
-  const fetchPrices = async () => {
-    const net = NETWORKS[networkKey];
+  const fetchPrices = async (overrideKey?: NetworkKey) => {
+    const effectiveKey = overrideKey ?? networkKey;
+    const net = NETWORKS[effectiveKey];
     const tokenIds = Array.from(new Set([
       net.nativeSymbol === 'MATIC' ? 'matic-network' : 'ethereum',
       ...Object.values(net.tokens).map(t => t.coingeckoId)
@@ -232,18 +234,21 @@ export default function Web3Copilot() {
     }
   };
 
-  const fetchBalances = async () => {
-    if (!address || !signer) return;
+  const fetchBalances = async (opts?: { signerOverride?: ethers.Signer; addressOverride?: string; networkOverride?: NetworkKey }) => {
+    const effectiveSigner = opts?.signerOverride ?? signer;
+    const effectiveAddress = opts?.addressOverride ?? address;
+    const effectiveKey = opts?.networkOverride ?? networkKey;
+    if (!effectiveAddress || !effectiveSigner) return;
     
     setIsBalancesLoading(true);
     setStatus({ message: '', type: '' });
 
     try {
-      const net = NETWORKS[networkKey];
+      const net = NETWORKS[effectiveKey];
       const newBalances: Balances = {};
       
       // Get native balance
-      const nativeBalanceWei = await signer.getBalance();
+      const nativeBalanceWei = await effectiveSigner.getBalance();
       newBalances[net.nativeSymbol] = parseFloat(ethers.utils.formatEther(nativeBalanceWei)).toFixed(4);
 
       // Get token balances from Alchemy
@@ -251,7 +256,7 @@ export default function Web3Copilot() {
         id: 1,
         jsonrpc: "2.0",
         method: "alchemy_getTokenBalances",
-        params: [address, Object.values(net.tokens).map(t => t.address)]
+        params: [effectiveAddress, Object.values(net.tokens).map(t => t.address)]
       };
 
       const response = await fetch(net.alchemyUrl, {
