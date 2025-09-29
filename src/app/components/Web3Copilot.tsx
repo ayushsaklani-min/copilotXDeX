@@ -52,10 +52,14 @@ const getExternalProvider = (): ethers.providers.ExternalProvider => {
 const AMOY_CHAIN_ID = '0x13882';
 const SEPOLIA_CHAIN_ID = '0xaa36a7';
 // Allow per-network keys; fall back to a single shared key if provided
-const ALCHEMY_API_KEY_SHARED = '';
-const ALCHEMY_API_KEY_AMOY = 'cWLAkUnYYRdZ041Gea_01';
-const ALCHEMY_API_KEY_SEPOLIA = 'GcHN5LnPwkFGcPWhGb-qc';
-const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyDl9pqcEoAg1pNUyckWPurzyxiTLhEWt8w';
+// Support legacy `NEXT_PUBLIC_ALCHEMY_API_KEY` as an additional fallback
+const ALCHEMY_API_KEY_SHARED =
+  process.env.NEXT_PUBLIC_ALCHEMY_API_KEY ||
+  process.env.NEXT_PUBLIC_ALCHEMY_API_KEY_SHARED ||
+  '';
+const ALCHEMY_API_KEY_AMOY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY_AMOY || ALCHEMY_API_KEY_SHARED;
+const ALCHEMY_API_KEY_SEPOLIA = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY_SEPOLIA || ALCHEMY_API_KEY_SHARED;
+const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 // Network configuration for Polygon Amoy and Ethereum Sepolia
 const NETWORKS = {
@@ -240,6 +244,15 @@ export default function Web3Copilot() {
 
     try {
       const net = NETWORKS[networkKey];
+      const alchemyKeyByNetwork: Record<NetworkKey, string> = {
+        amoy: ALCHEMY_API_KEY_AMOY,
+        sepolia: ALCHEMY_API_KEY_SEPOLIA
+      };
+      if (!alchemyKeyByNetwork[networkKey]) {
+        throw new Error(
+          `Missing Alchemy API key for ${net.name}. Add NEXT_PUBLIC_ALCHEMY_API_KEY_${networkKey.toUpperCase()} or NEXT_PUBLIC_ALCHEMY_API_KEY to .env.local and restart.`
+        );
+      }
       const newBalances: Balances = {};
       
       // Get native balance
