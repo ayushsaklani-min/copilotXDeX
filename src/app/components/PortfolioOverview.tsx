@@ -37,7 +37,7 @@ export default function PortfolioOverview({ isOpen, onToggle, balances, isBalanc
   const tokenDisplayOrder = [nativeSymbol, ...Object.keys(tokens)];
   const uniqueOrder = Array.from(new Set(tokenDisplayOrder));
   return (
-    <div className="bg-white rounded-lg mb-5 border-4 border-black">
+    <div className="rounded-lg mb-5 neon-card">
       <div 
         className="p-4 cursor-pointer flex justify-between items-center text-xl font-bold"
         onClick={onToggle}
@@ -47,7 +47,7 @@ export default function PortfolioOverview({ isOpen, onToggle, balances, isBalanc
           ▼
         </span>
       </div>
-      <div className={`overflow-hidden will-change-[max-height] transition-[max-height] ease-in-out duration-300 ${isOpen ? 'max-h-[500px]' : 'max-h-0'}`}>
+      <div className={`overflow-hidden will-change-[max-height] transition-[max-height] ease-in-out duration-300 ${isOpen ? 'max-h-[700px]' : 'max-h-0'}`}>
         <div className="px-4 pb-4">
           {isBalancesLoading ? (
             <div className="flex justify-center items-center py-8">
@@ -56,20 +56,20 @@ export default function PortfolioOverview({ isOpen, onToggle, balances, isBalanc
           ) : (
             <div className="grid grid-cols-2 gap-4 auto-rows-fr">
               {uniqueOrder.map(symbol => (
-                <div key={symbol} className="bg-gray-100 rounded-lg p-4 border-4 border-black h-full flex flex-col justify-between">
+                <div key={symbol} className="rounded-lg p-4 h-full flex flex-col justify-between neon-control">
                   <div className="flex items-center gap-3">
                     <div 
                       className="w-8 h-8" 
                       dangerouslySetInnerHTML={{ __html: (TOKEN_ICONS as Record<string, string>)[symbol] || TOKEN_ICONS['MATIC'] }} 
                     />
-                    <span className="text-xl font-bold">{symbol}</span>
+                    <span className="text-xl font-bold text-white">{symbol}</span>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold">
+                    <div className="text-2xl font-bold text-white">
                       {balances[symbol] || '0.0000'}
                     </div>
                     {prices[symbol] && (
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-300">
                         ${(parseFloat(balances[symbol] || '0') * prices[symbol]).toFixed(2)}
                       </div>
                     )}

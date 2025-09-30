@@ -152,6 +152,12 @@ export default function Web3Copilot() {
     setOpenSection(prev => (prev === section ? null : section));
   };
 
+  // Passive selector used on the connect screen: only updates UI state.
+  const selectNetwork = (target: NetworkKey) => {
+    setStatus({ message: '', type: '' });
+    setNetworkKey(target);
+  };
+
   const switchNetwork = async (target: NetworkKey) => {
     try {
       setStatus({ message: '', type: '' });
@@ -213,11 +219,12 @@ export default function Web3Copilot() {
       const web3Provider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
       await web3Provider.send("eth_requestAccounts", []);
       const { chainId } = await web3Provider.getNetwork();
-      // If not on Amoy or Sepolia, prompt switch to Amoy by default
-      if (chainId !== NETWORKS.amoy.chainIdDec && chainId !== NETWORKS.sepolia.chainIdDec) {
+      // Ensure we are on the user-selected network
+      const desired = NETWORKS[networkKey];
+      if (chainId !== desired.chainIdDec) {
         await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: AMOY_CHAIN_ID }]
+          params: [{ chainId: desired.chainIdHex }]
         });
       }
 
@@ -343,10 +350,10 @@ export default function Web3Copilot() {
               </motion.div>
             )}
           </AnimatePresence>
-          <div className="container connect-container">
+          <div className="neon-card connect-container p-6">
             <div className="flex flex-col items-center mb-4">
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold text-center">Web3 Copilot</h1>
+                <h1 className="text-4xl font-bold text-center text-cyan-200">Web3 Copilot</h1>
                 <motion.div
                   key={`rocket-idle-${launchId}`}
                   initial={{ y: 0, rotate: 0 }}
@@ -378,24 +385,55 @@ export default function Web3Copilot() {
                   </div>
                 </motion.div>
               </div>
-              <p className="mt-2 text-center text-gray-700 font-medium">Ready to know your portfolio insight with our copilot?</p>
+              <p className="mt-2 text-center text-gray-200 font-medium">Ready to know your portfolio insight with our copilot?</p>
             </div>
-            <div className="flex justify-center gap-3 mb-4">
+            {/* Quick network pick icons */}
+            <div className="flex justify-center gap-4 mb-4">
+              <button
+                aria-label="Switch to Ethereum Sepolia"
+                onClick={() => selectNetwork('sepolia')}
+                className={`relative w-14 h-14 rounded-xl neon-control flex items-center justify-center transition-all duration-200 hover:-translate-y-0.5 ${networkKey === 'sepolia' ? 'ring-2 ring-blue-400' : ''}`}
+              >
+                <svg viewBox="0 0 32 32" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+                  <polygon points="16,2 6,16 16,12 26,16" fill="#6366f1"/>
+                  <polygon points="16,30 6,18 16,22 26,18" fill="#818cf8"/>
+                </svg>
+              </button>
+              <button
+                aria-label="Switch to Polygon Amoy"
+                onClick={() => selectNetwork('amoy')}
+                className={`relative w-14 h-14 rounded-xl neon-control flex items-center justify-center transition-all duration-200 hover:-translate-y-0.5 ${networkKey === 'amoy' ? 'ring-2 ring-purple-400' : ''}`}
+              >
+                <svg viewBox="0 0 32 32" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 10 L16 6 L22 10 L22 18 L16 22 L10 18 Z" fill="#7c3aed"/>
+                </svg>
+              </button>
+            </div>
+            {/* Fallback select for additional networks */}
+            <div className="flex justify-center gap-3 mb-2">
               <select
-                className="border-4 border-black rounded px-3 py-2 bg-white text-black"
+                className="neon-control rounded px-3 py-2"
                 value={networkKey}
-                onChange={(e) => switchNetwork(e.target.value as NetworkKey)}
+                onChange={(e) => selectNetwork(e.target.value as NetworkKey)}
               >
                 <option value="amoy">Polygon Amoy</option>
                 <option value="sepolia">Ethereum Sepolia</option>
               </select>
             </div>
-            <button 
-              className="connect-btn w-full py-4 px-6 rounded-lg border-4 border-black bg-yellow-400 text-black font-bold text-lg cursor-pointer transition-all duration-200 hover:shadow-lg hover:transform hover:translate-x-1 hover:translate-y-1 active:shadow-sm active:transform active:translate-x-2 active:translate-y-2"
+            <motion.button
+              whileHover={{ y: -2, boxShadow: '6px 6px 0 #000' }}
+              whileTap={{ y: 0, boxShadow: '2px 2px 0 #000' }}
               onClick={connectWallet}
+              className="relative connect-btn w-full py-4 px-6 rounded-lg border-4 border-black bg-yellow-400 text-black font-bold text-lg cursor-pointer transition-colors duration-200"
             >
-              Connect Wallet
-            </button>
+              <span className="relative z-10">Connect Wallet</span>
+              <span
+                className="pointer-events-none absolute inset-0 rounded-md"
+                style={{
+                  boxShadow: '0 0 20px rgba(250, 204, 21, 0.6), inset 0 0 12px rgba(234, 179, 8, 0.35)'
+                }}
+              />
+            </motion.button>
             {status.message && (
               <div className={`status-msg text-center p-3 rounded-lg mb-4 font-bold border-4 border-black ${
                 status.type === 'error' ? 'bg-red-400 text-black' : 'bg-green-400 text-black'
@@ -415,18 +453,51 @@ export default function Web3Copilot() {
           transition={{ duration: 0.45, ease: 'easeOut' }}
         >
           <BackgroundAnimation />
-          <div className="container bg-white rounded-xl p-6 border-4 border-black shadow-2xl max-w-4xl mx-auto">
-            <h1 className="text-4xl font-bold text-center mb-6">Web3 Copilot 🚀</h1>
-            <div className="flex justify-center gap-3 mb-4">
-              <select
-                className="border-4 border-black rounded px-3 py-2 bg-white text-black"
-                value={networkKey}
-                onChange={(e) => switchNetwork(e.target.value as NetworkKey)}
+          {/* Top marquee header */}
+          <div className="mx-auto max-w-6xl mt-2 mb-4">
+            <div className="overflow-hidden rounded-lg glass-header text-cyan-300">
+              <motion.div
+                className="whitespace-nowrap py-2 px-4 font-bold text-xl tracking-wide"
+                initial={{ x: 0 }}
+                animate={{ x: ['0%', '-50%'] }}
+                transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
               >
-                <option value="amoy">Polygon Amoy</option>
-                <option value="sepolia">Ethereum Sepolia</option>
-              </select>
+                <span className="mx-10">Web3 Copilot 🚀</span>
+                <span className="mx-10">Your AI wallet copilot</span>
+                <span className="mx-10">Secure • Non-custodial • On-chain</span>
+                <span className="mx-10">Swap • Portfolio • Assistant</span>
+                <span className="mx-10">Web3 Copilot 🚀</span>
+                <span className="mx-10">Your AI wallet copilot</span>
+              </motion.div>
             </div>
+          </div>
+
+          <div className="mx-auto max-w-6xl grid grid-cols-12 gap-6 px-2">
+            {/* Left sidebar: networks */}
+            <aside className="col-span-12 md:col-span-3">
+              <div className="neon-card text-white p-4">
+                <div className="text-lg font-bold mb-3">Networks</div>
+                <details className="group">
+                  <summary className="cursor-pointer select-none neon-control px-3 py-2 flex items-center justify-between">
+                    <span>Select network</span>
+                    <span className="transition-transform group-open:rotate-180">▼</span>
+                  </summary>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <button onClick={() => switchNetwork('sepolia')} className={`neon-control py-2 font-bold ${networkKey==='sepolia'?'ring-2 ring-blue-400':''}`}>
+                      Sepolia
+                    </button>
+                    <button onClick={() => switchNetwork('amoy')} className={`neon-control py-2 font-bold ${networkKey==='amoy'?'ring-2 ring-purple-400':''}`}>
+                      Amoy
+                    </button>
+                  </div>
+                </details>
+              </div>
+            </aside>
+
+            {/* Main content cards */}
+            <div className="col-span-12 md:col-span-9">
+              <div className="neon-card p-6">
+                <h1 className="text-3xl font-bold mb-4 text-cyan-200">Web3 Copilot 🚀</h1>
             {status.message && (
               <div className={`status-msg text-center p-3 rounded-lg mb-4 font-bold border-4 border-black ${
                 status.type === 'error' ? 'bg-red-400 text-black' : 'bg-green-400 text-black'
@@ -467,6 +538,8 @@ export default function Web3Copilot() {
               onStatusChange={setStatus}
               onBalancesRefresh={fetchBalances}
             />
+              </div>
+            </div>
           </div>
         </motion.div>
       )}

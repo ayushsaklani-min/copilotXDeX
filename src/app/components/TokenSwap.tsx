@@ -241,7 +241,7 @@ export default function TokenSwap({
   };
 
   return (
-    <div className="bg-white rounded-lg mb-5 border-4 border-black">
+    <div className="neon-card rounded-lg mb-5">
       <div 
         className="p-4 cursor-pointer flex justify-between items-center text-xl font-bold"
         onClick={onToggle}
@@ -261,13 +261,13 @@ export default function TokenSwap({
               onChange={e => setSlippage(e.target.value)}
               step="0.1"
               min="0"
-              className="w-10 bg-gray-100 border-4 border-black text-black rounded px-1 py-1 text-center font-mono"
+              className="w-12 neon-control text-white px-1 py-1 text-center font-mono"
             />
             <span>%</span>
           </div>
 
-          <div className="bg-white rounded-lg p-3 border-4 border-black mb-2">
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
+          <div className="neon-control rounded-lg p-3 mb-2">
+            <div className="flex justify-between text-sm text-gray-200 mb-1">
               <span>You Pay</span>
               <span>Balance: {fromToken === nativeSymbol ? (balances[nativeSymbol] || '0.0000') : (balances[fromToken] || '0.0000')}</span>
             </div>
@@ -277,11 +277,11 @@ export default function TokenSwap({
                 placeholder="0.0"
                 value={fromAmount}
                 onChange={(e) => setFromAmount(e.target.value)}
-                className="text-2xl bg-transparent border-none text-black outline-none w-full p-0 font-mono"
+                className="text-2xl bg-transparent border-none text-white outline-none w-full p-0 font-mono"
               />
-              <div className="flex items-center gap-3 bg-gray-100 border-4 border-black px-4 py-3 rounded-lg cursor-pointer relative">
+              <div className="flex items-center gap-3 neon-control px-4 py-3 rounded-lg cursor-pointer relative">
                 <div 
-                  className="w-8 h-8" 
+                  className="w-8 h-8 text-white" 
                   dangerouslySetInnerHTML={{ __html: TOKEN_ICONS[fromToken] }} 
                 />
                 <select
@@ -289,32 +289,32 @@ export default function TokenSwap({
                   value={fromToken}
                   onChange={(e) => setFromToken(e.target.value)}
                 >
-                  <option className="font-bold text-xl text-blue" value={nativeSymbol}>{nativeSymbol}</option>
+                  <option className="font-bold text-xl" value={nativeSymbol}>{nativeSymbol}</option>
                   {Object.keys(tokens).map(t => (
-                    <option className="font-bold text-xl text-blue" key={t} value={t}>{t}</option>
+                    <option className="font-bold text-xl" key={t} value={t}>{t}</option>
                   ))}
                 </select>
-                <span className="font-bold text-xl text-blue">{fromToken}</span>
+                <span className="font-bold text-xl text-white">{fromToken}</span>
               </div>
             </div>
-            <div className="text-lg text-gray-600 mt-1 h-4">
+            <div className="text-lg text-gray-300 mt-1 h-4">
               {fromAmount && prices[fromToken] ? `$${(parseFloat(fromAmount) * prices[fromToken]).toFixed(2)}` : ''}
             </div>
           </div>
 
-          <div className="text-center text-2xl text-black my-2 relative z-10">↓</div>
+          <div className="text-center text-2xl text-cyan-200 my-2 relative z-10">↓</div>
 
-          <div className="bg-white rounded-lg p-3 border-4 border-black mb-4">
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
+          <div className="neon-control rounded-lg p-3 mb-4">
+            <div className="flex justify-between text-sm text-gray-200 mb-1">
               <span>You Receive (Simulated)</span>
             </div>
             <div className="flex justify-between items-center">
-              <div className="text-2xl text-gray-600 text-left">
+              <div className="text-2xl text-gray-200 text-left">
                 {isQuoteLoading ? '...' : (quote || '0.0')}
               </div>
-              <div className="flex items-center gap-3 bg-gray-100 border-4 border-black px-4 py-3 rounded-lg cursor-pointer relative">
+              <div className="flex items-center gap-3 neon-control px-4 py-3 rounded-lg cursor-pointer relative">
                 <div 
-                  className="w-8 h-8" 
+                  className="w-8 h-8 text-white" 
                   dangerouslySetInnerHTML={{ __html: TOKEN_ICONS[toToken] }} 
                 />
                 <select
@@ -323,20 +323,20 @@ export default function TokenSwap({
                   onChange={(e) => setToToken(e.target.value)}
                 >
                   {Object.keys(tokens).map(t => (
-                    <option className="font-bold text-xl text-blue" key={t} value={t}>{t}</option>
+                    <option className="font-bold text-xl" key={t} value={t}>{t}</option>
                   ))}
-                  <option className="font-bold text-xl text-blue" value={nativeSymbol}>{nativeSymbol}</option>
+                  <option className="font-bold text-xl" value={nativeSymbol}>{nativeSymbol}</option>
                 </select>
-                <span className="font-bold text-xl text-blue">{toToken}</span>
+                <span className="font-bold text-xl text-white">{toToken}</span>
               </div>
             </div>
-            <div className="text-sm text-gray-600 mt-1 h-4">
+            <div className="text-sm text-gray-300 mt-1 h-4">
               {quote && prices[toToken] ? `$${(parseFloat(quote) * prices[toToken]).toFixed(2)}` : ''}
             </div>
           </div>
 
           <button
-            className="w-full py-4 px-6 rounded-lg border-4 border-black bg-cyan-400 text-black font-bold text-lg cursor-pointer transition-all duration-200 hover:shadow-lg hover:transform hover:translate-x-1 hover:translate-y-1 active:shadow-sm active:transform active:translate-x-2 active:translate-y-2 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none"
+            className="w-full py-4 px-6 rounded-lg neon-control text-white font-bold text-lg cursor-pointer disabled:opacity-60"
             onClick={handleSwap}
             disabled={isSwapping || isQuoteLoading || !fromAmount || parseFloat(fromAmount) <= 0}
           >

@@ -1,12 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #f4f4f4;
-  --foreground: #FFFFFF;
+  --background: #0a091e; /* deep space */
+  --foreground: rgba(22,28,51,0.6); /* glass dark */
+  --text: #e0e0e0;
   --black: #111111;
   --yellow: #FAFF00;
-  --cyan: #00F0FF;
+  --cyan: #00FFFF; /* neon cyan */
+  --magenta: #F000FF; /* neon magenta */
   --green: #89F1A7;
   --red: #FF9D9D;
   --blue: #A3D4FF;
@@ -20,9 +22,13 @@
 }
 
 body {
-  font-family: 'Space Mono', monospace;
-  background-color: var(--background);
-  color: var(--black);
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, 'Space Mono', sans-serif;
+  background-color: #0a091e;
+  background-image: radial-gradient(800px 500px at 20% 10%, rgba(0,255,255,0.06), transparent 60%),
+                    radial-gradient(900px 700px at 80% 0%, rgba(240,0,255,0.05), transparent 65%),
+                    linear-gradient(180deg, #0a091e 0%, #1a143b 100%);
+  background-size: cover;
+  color: var(--text);
   margin: 0;
   padding: 20px;
   display: flex;
@@ -31,19 +37,44 @@ body {
   min-height: 100vh;
 }
 
-.container {
-  background-color: var(--foreground);
+/* Aurora utilities */
+.glass-header {
+  background-color: rgba(22,28,51,0.5);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0,255,255,0.3);
+}
+
+.neon-card {
+  background-color: rgba(22,28,51,0.6);
   border-radius: 12px;
-  padding: 24px;
-  border: 3px solid var(--black);
-  box-shadow: 10px 10px 0 var(--black);
-  transition: all 0.2s ease-in-out;
-  width: 100%;
+  border: 1px solid rgba(0,255,255,0.35);
+  box-shadow: 0 0 20px rgba(0,255,255,0.25), 0 0 40px rgba(240,0,255,0.12);
+}
+
+.neon-control {
+  background-color: rgba(16,20,40,0.8);
+  color: #ffffff;
+  border: 1px solid rgba(0,255,255,0.25);
+  border-radius: 10px;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: box-shadow .2s ease, border-color .2s ease, transform .15s ease;
+}
+.neon-control:hover, .neon-control:focus {
+  border-color: rgba(0,255,255,0.5);
+  box-shadow: 0 0 14px rgba(0,255,255,0.35), 0 0 26px rgba(240,0,255,0.18);
+}
+
+.dark-dropdown { /* for clarity with spec */
+  background-color: #161c33;
+  color: #ffffff;
+  border: 1px solid rgba(0,255,255,0.3);
 }
 
 .connect-container {
   width: 100%;
-  max-width: 400px;
+  max-width: 560px;
 }
 
 @keyframes floatUp {
