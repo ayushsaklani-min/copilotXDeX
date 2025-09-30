@@ -113,7 +113,7 @@ export default function AIAssistant({ isOpen, onToggle, balances, geminiApiUrl, 
             <button className="w-full py-3 rounded-lg border-4 border-black bg-yellow-400 font-bold" onClick={() => {
               try { if (typeof window !== 'undefined') localStorage.setItem('copilot_ai_greeting_shown', '1'); } catch {}
               setShowGreeting(false);
-            }}>Let's go</button>
+            }}>Let&apos;s go</button>
           </div>
         </div>
       )}

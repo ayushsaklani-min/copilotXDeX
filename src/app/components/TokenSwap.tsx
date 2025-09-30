@@ -125,6 +125,8 @@ export default function TokenSwap({
     }
   };
 
+  // Recalculate quote when inputs change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const timeoutId = setTimeout(getQuote, 500);
     return () => clearTimeout(timeoutId);
