@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ethers } from 'ethers';
 import BackgroundAnimation from './BackgroundAnimation';
@@ -22,10 +22,7 @@ interface Prices {
   [key: string]: number;
 }
 
-interface ConversationMessage {
-  role: 'user' | 'ai';
-  parts: Array<{ text: string }>;
-}
+//
 
 // Minimal token config shape based on NETWORKS constant
 type TokenConfig = {
@@ -52,7 +49,6 @@ const getExternalProvider = (): ethers.providers.ExternalProvider => {
 const AMOY_CHAIN_ID = '0x13882';
 const SEPOLIA_CHAIN_ID = '0xaa36a7';
 // Allow per-network keys; fall back to a single shared key if provided
-const ALCHEMY_API_KEY_SHARED = '';
 const ALCHEMY_API_KEY_AMOY = 'cWLAkUnYYRdZ041Gea_01';
 const ALCHEMY_API_KEY_SEPOLIA = 'GcHN5LnPwkFGcPWhGb-qc';
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyDl9pqcEoAg1pNUyckWPurzyxiTLhEWt8w';
@@ -161,7 +157,6 @@ export default function Web3Copilot() {
   const switchNetwork = async (target: NetworkKey) => {
     try {
       setStatus({ message: '', type: '' });
-      const provider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
       await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: NETWORKS[target].chainIdHex }]
@@ -176,7 +171,7 @@ export default function Web3Copilot() {
       // Immediately refresh using the new context to avoid stale state
       await fetchPrices(target);
       await fetchBalances({ signerOverride: newSigner, addressOverride: userAddress, networkOverride: target });
-    } catch (e) {
+    } catch (_e) {
       setStatus({ message: 'Network switch failed or was rejected.', type: 'error' });
     }
   };
@@ -236,7 +231,7 @@ export default function Web3Copilot() {
       const userAddress = await web3Signer.getAddress();
       setSigner(web3Signer);
       setAddress(userAddress);
-    } catch (error) {
+    } catch (_e) {
       setStatus({ message: 'Wallet connection rejected or failed.', type: 'error' });
     }
   };
@@ -316,11 +311,13 @@ export default function Web3Copilot() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     fetchPrices();
   }, [networkKey]);
 
   useEffect(() => {
     if (!signer || !address) return;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     fetchBalances();
   }, [signer, address, networkKey]);
 
