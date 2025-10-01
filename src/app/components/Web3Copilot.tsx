@@ -37,6 +37,13 @@ interface AlchemyTokenBalance {
   tokenBalance: string | null;
   error?: unknown;
 }
+interface AlchemyTokenMetadataItem {
+  contractAddress: string;
+  decimals: number | null;
+  name: string | null;
+  symbol: string | null;
+  logo?: string | null;
+}
 
 // Narrow and return an EIP-1193 external provider for ethers.js
 const getExternalProvider = (): ethers.providers.ExternalProvider => {
@@ -65,10 +72,10 @@ const NETWORKS = {
     // Sushiswap router on Polygon PoS works on Amoy forks; change if needed
     routerAddress: process.env.NEXT_PUBLIC_AMOY_ROUTER_ADDRESS || '0x1b02da8cb0d097eb8d57a175b88c7d8b47997506',
     tokens: {
-      'WMATIC': { address: '0x833bf555ad7201dba33d4a5aea88c179468ca424', decimals: 18, coingeckoId: 'matic-network' },
-      'WETH':   { address: '0x6e7655b7b12128526569b1348b8959d2a4501a3f', decimals: 18, coingeckoId: 'weth' },
-      'DAI':    { address: '0x6c4495e55c1e96a40a233c467e0824b077ad17c6', decimals: 18, coingeckoId: 'dai' },
-      'USDC':   { address: '0x99505f251a18671198a6dd69c8a98075fc5e941b', decimals: 6, coingeckoId: 'usd-coin' },
+      'WMATIC': { address: '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889', decimals: 18, coingeckoId: 'matic-network' },
+      'WETH':   { address: '0x7b79995e5f793A07Bc00c21412e50Eaae098E7f9', decimals: 18, coingeckoId: 'weth' },
+      'DAI':    { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18, coingeckoId: 'dai' },
+      'USDC':   { address: '0x41e94Eb019C0762f9BFC4545e35629259441294f', decimals: 6, coingeckoId: 'usd-coin' },
       // Optional POL on Amoy (provide NEXT_PUBLIC_AMOY_POL_ADDRESS)
       ...(process.env.NEXT_PUBLIC_AMOY_POL_ADDRESS ? { 'POL': { address: process.env.NEXT_PUBLIC_AMOY_POL_ADDRESS as string, decimals: 18, coingeckoId: 'polygon-ecosystem-token' } } : {})
     }
@@ -84,8 +91,10 @@ const NETWORKS = {
     routerAddress: process.env.NEXT_PUBLIC_SEPOLIA_ROUTER_ADDRESS || '',
     tokens: {
       // Canonical WETH on Sepolia
-      'WETH': { address: '0xdd13E55209Fd76AfE204dBda4007C227904f0a81', decimals: 18, coingeckoId: 'weth' }
-      // Add more ERC-20s on Sepolia as needed
+      'WETH': { address: '0xdd13E55209Fd76AfE204dBda4007C227904f0a81', decimals: 18, coingeckoId: 'weth' },
+      // DAI and USDC on Sepolia (env override supported)
+      'DAI':  { address: (process.env.NEXT_PUBLIC_SEPOLIA_DAI_ADDRESS as string) || '0x68194a729C2450ad26072b3D33ADaCbcef39D574', decimals: 18, coingeckoId: 'dai' },
+      'USDC': { address: (process.env.NEXT_PUBLIC_SEPOLIA_USDC_ADDRESS as string) || '0x94a9D9AC8a22534E3FaCa4E4343A41133453d586', decimals: 6, coingeckoId: 'usd-coin' }
     }
   }
 } as const;
@@ -104,6 +113,81 @@ export default function Web3Copilot() {
   const [networkKey, setNetworkKey] = useState<NetworkKey>('amoy');
   // Launch animation trigger counter
   const [launchId, setLaunchId] = useState<number>(0);
+
+  // Detect connected network and account on mount; subscribe to provider events
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    try {
+      const ext = getExternalProvider();
+      const provider = new ethers.providers.Web3Provider(ext, 'any');
+
+      // Immediately probe connection without forcing a connect
+      (async () => {
+        try {
+          const accounts = await provider.listAccounts();
+          const net = await provider.getNetwork();
+          if (accounts.length > 0) {
+            const detectedKey: NetworkKey = net.chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+            setNetworkKey(detectedKey);
+            const detectedSigner = provider.getSigner();
+            setSigner(detectedSigner);
+            setAddress(accounts[0]);
+          } else {
+            // No account connected: still reflect current network in UI
+            const detectedKey: NetworkKey = net.chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+            setNetworkKey(detectedKey);
+          }
+        } catch {}
+      })();
+
+      const handleChainChanged = async (_chainIdHex: string) => {
+        const net = await provider.getNetwork();
+        const detectedKey: NetworkKey = net.chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+        setNetworkKey(detectedKey);
+        try {
+          const newSigner = provider.getSigner();
+          const userAddress = await newSigner.getAddress();
+          setSigner(newSigner);
+          setAddress(userAddress);
+          await fetchPrices(detectedKey);
+          await fetchBalances({ signerOverride: newSigner, addressOverride: userAddress, networkOverride: detectedKey });
+        } catch {
+          // likely no address selected yet
+          setSigner(null);
+          setAddress(null);
+          await fetchPrices(detectedKey);
+        }
+      };
+
+      const handleAccountsChanged = async (accounts: string[]) => {
+        if (accounts && accounts.length > 0) {
+          const newSigner = provider.getSigner();
+          setSigner(newSigner);
+          setAddress(accounts[0]);
+          await fetchBalances({ signerOverride: newSigner, addressOverride: accounts[0] });
+        } else {
+          setSigner(null);
+          setAddress(null);
+          setBalances({});
+        }
+      };
+
+      // Subscribe to EIP-1193 events
+      (ext as unknown as { on: (event: string, cb: (...args: any[]) => void) => void }).on('chainChanged', handleChainChanged);
+      (ext as unknown as { on: (event: string, cb: (...args: any[]) => void) => void }).on('accountsChanged', handleAccountsChanged);
+
+      cleanup = () => {
+        try {
+          (ext as unknown as { removeListener: (event: string, cb: (...args: any[]) => void) => void }).removeListener('chainChanged', handleChainChanged);
+          (ext as unknown as { removeListener: (event: string, cb: (...args: any[]) => void) => void }).removeListener('accountsChanged', handleAccountsChanged);
+        } catch {}
+      };
+    } catch {}
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, []);
 
   // Polygon sparkle burst for connect transition
   const renderPolygonBurst = (keyPrefix: string) => {
@@ -179,25 +263,35 @@ export default function Web3Copilot() {
   const fetchPrices = async (overrideKey?: NetworkKey) => {
     const effectiveKey = overrideKey ?? networkKey;
     const net = NETWORKS[effectiveKey];
-    const tokenIds = Array.from(new Set([
-      net.nativeSymbol === 'MATIC' ? 'matic-network' : 'ethereum',
-      ...Object.values(net.tokens).map(t => t.coingeckoId)
-    ]));
-    const ids = tokenIds.join(',');
+    // Map from symbol to potential coingecko id guesses
+    const symbolToId: Record<string, string> = {
+      ETH: 'ethereum',
+      MATIC: 'matic-network',
+      WETH: 'weth',
+      WMATIC: 'matic-network',
+      DAI: 'dai',
+      USDC: 'usd-coin',
+      LINK: 'chainlink',
+      POL: 'polygon-ecosystem-token'
+    };
+
+    const allSymbols = new Set<string>([net.nativeSymbol, ...Object.keys(balances)]);
+    const ids = Array.from(allSymbols)
+      .map(s => symbolToId[s.toUpperCase()])
+      .filter(Boolean);
+    if (ids.length === 0) return;
+
     try {
-      const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
+      const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${Array.from(new Set(ids)).join(',')}&vs_currencies=usd`);
       const data = await response.json();
       const newPrices: Prices = {};
-      // Native symbol
-      if (net.nativeSymbol === 'MATIC') newPrices['MATIC'] = data['matic-network']?.usd;
-      if (net.nativeSymbol === 'ETH') newPrices['ETH'] = data['ethereum']?.usd;
-      // ERC20s
-      Object.entries(net.tokens).forEach(([symbol, info]) => {
-        newPrices[symbol] = data[info.coingeckoId]?.usd;
+      Array.from(allSymbols).forEach(sym => {
+        const id = symbolToId[sym.toUpperCase()];
+        if (id && data[id]?.usd) newPrices[sym.toUpperCase()] = data[id].usd;
       });
       setPrices(newPrices);
     } catch (error) {
-      console.error("Failed to fetch prices:", error);
+      console.error('Failed to fetch prices:', error);
     }
   };
 
@@ -248,57 +342,125 @@ export default function Web3Copilot() {
     try {
       const net = NETWORKS[effectiveKey];
       const newBalances: Balances = {};
-      
+
       // Get native balance
       const nativeBalanceWei = await effectiveSigner.getBalance();
       newBalances[net.nativeSymbol] = parseFloat(ethers.utils.formatEther(nativeBalanceWei)).toFixed(4);
 
-      // Get token balances from Alchemy
-      const alchemyRequestBody = {
-        id: 1,
-        jsonrpc: "2.0",
-        method: "alchemy_getTokenBalances",
-        params: [effectiveAddress, Object.values(net.tokens).map(t => t.address)]
-      };
-
-      const response = await fetch(net.alchemyUrl, {
+      // 1) Discover all token balances (all ERC20s) for the address
+      const tbResponse = await fetch(net.alchemyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(alchemyRequestBody)
+        body: JSON.stringify({
+          id: 1,
+          jsonrpc: '2.0',
+          method: 'alchemy_getTokenBalances',
+          params: [effectiveAddress, 'erc20']
+        })
       });
-
-      // Alchemy returns non-2xx for invalid keys or insufficient permissions.
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Alchemy ${response.status} ${response.statusText} on ${net.name}: ${errorText}`);
+      if (!tbResponse.ok) {
+        const errorText = await tbResponse.text();
+        throw new Error(`Alchemy ${tbResponse.status} ${tbResponse.statusText} on ${net.name}: ${errorText}`);
       }
+      const tbData = await tbResponse.json();
+      if (tbData.error) throw new Error(`Alchemy RPC error on ${net.name}: ${tbData.error.message}`);
+      const tokenData: AlchemyTokenBalance[] = tbData.result.tokenBalances as AlchemyTokenBalance[];
 
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(`Alchemy RPC error on ${net.name}: ${data.error.message}`);
+      // 2) Fetch metadata for discovered contracts to get symbol/decimals
+      const contracts = tokenData
+        .map(t => t.contractAddress)
+        .filter(Boolean) as string[];
+      const metaResponse = await fetch(net.alchemyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 2,
+          jsonrpc: '2.0',
+          method: 'alchemy_getTokenMetadata',
+          params: contracts.map(addr => ({ contractAddress: addr }))
+        })
+      });
+      // Some Alchemy deployments do not support batch metadata; fall back to sequential if needed
+      let metadataItems: AlchemyTokenMetadataItem[] = [];
+      if (metaResponse.ok) {
+        try {
+          const metaData = await metaResponse.json();
+          // If batch shape, normalize; if not, handle below
+          if (Array.isArray(metaData.result)) {
+            metadataItems = metaData.result as AlchemyTokenMetadataItem[];
+          }
+        } catch {}
       }
-
-      const tokenData: AlchemyTokenBalance[] = data.result.tokenBalances as AlchemyTokenBalance[];
-      const tokenSymbolMap: Record<string, { symbol: string } & TokenConfig> = Object.entries(net.tokens).reduce(
-        (acc, [symbol, token]) => {
-          acc[token.address.toLowerCase()] = { symbol, ...(token as TokenConfig) };
-          return acc;
-        },
-        {} as Record<string, { symbol: string } & TokenConfig>
-      );
-
-      tokenData.forEach((tokenItem) => {
-        const tokenInfo = tokenSymbolMap[tokenItem.contractAddress.toLowerCase()];
-        if (tokenInfo && tokenItem.tokenBalance) {
-          const balance = ethers.utils.formatUnits(tokenItem.tokenBalance, tokenInfo.decimals);
-          newBalances[tokenInfo.symbol] = parseFloat(balance).toFixed(4);
+      if (metadataItems.length === 0) {
+        // Fallback: call one-by-one (limited count to avoid rate issues)
+        metadataItems = [];
+        for (const addr of contracts.slice(0, 50)) {
+          const r = await fetch(net.alchemyUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: 3,
+              jsonrpc: '2.0',
+              method: 'alchemy_getTokenMetadata',
+              params: [{ contractAddress: addr }]
+            })
+          });
+          if (!r.ok) continue;
+          const j = await r.json();
+          if (j && j.result) metadataItems.push({ ...j.result, contractAddress: addr });
         }
+      }
+
+      const addressToMeta = new Map<string, { symbol: string; decimals: number }>();
+      // Seed with known network tokens as a fallback when metadata is missing
+      Object.entries(NETWORKS[effectiveKey].tokens).forEach(([symbol, cfg]) => {
+        addressToMeta.set(cfg.address.toLowerCase(), { symbol, decimals: (cfg as TokenConfig).decimals });
+      });
+      metadataItems.forEach(m => {
+        if (!m || !m.contractAddress) return;
+        const symbol = (m.symbol || '').trim();
+        const decimals = typeof m.decimals === 'number' ? m.decimals : 18;
+        if (symbol) addressToMeta.set(m.contractAddress.toLowerCase(), { symbol, decimals });
       });
 
-      // Set zero balances for tokens not found
-      Object.keys(net.tokens).forEach(symbol => {
-        if (!newBalances[symbol]) newBalances[symbol] = "0.0000";
+      // For tokens with balances but missing metadata, fetch on-chain ERC20 symbol/decimals
+      const providerForChain = (effectiveSigner.provider as ethers.providers.Provider) ?? new ethers.providers.Web3Provider(getExternalProvider());
+      const erc20Abi = [
+        'function symbol() view returns (string)',
+        'function decimals() view returns (uint8)'
+      ];
+
+      for (const t of tokenData.slice(0, 60)) {
+        if (!t.tokenBalance || !t.contractAddress) continue;
+        const addrLower = t.contractAddress.toLowerCase();
+        if (!addressToMeta.has(addrLower)) {
+          try {
+            const c = new ethers.Contract(t.contractAddress, erc20Abi, providerForChain);
+            const [sym, dec] = await Promise.all([
+              c.symbol().catch(() => ''),
+              c.decimals().catch(() => 18)
+            ]);
+            const symbol = (typeof sym === 'string' ? sym : '').trim();
+            const decimals = typeof dec === 'number' ? dec : 18;
+            if (symbol) addressToMeta.set(addrLower, { symbol, decimals });
+          } catch {}
+        }
+      }
+
+      tokenData.forEach((t) => {
+        if (!t.tokenBalance || !t.contractAddress) return;
+        const meta = addressToMeta.get(t.contractAddress.toLowerCase());
+        if (!meta) return;
+        try {
+          const balance = ethers.utils.formatUnits(t.tokenBalance, meta.decimals);
+          // Avoid overriding native symbol
+          if (meta.symbol && meta.symbol.toUpperCase() !== net.nativeSymbol.toUpperCase()) {
+            newBalances[meta.symbol.toUpperCase()] = parseFloat(balance).toFixed(4);
+          }
+        } catch {}
       });
+
+      // Only show tokens with actual balances or native token - no false zero balances
 
       setBalances(newBalances);
     } catch (error) {
@@ -320,6 +482,8 @@ export default function Web3Copilot() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     fetchBalances();
   }, [signer, address, networkKey]);
+
+  // Background polling removed - balances will only refresh on user actions
 
   return (
     <AnimatePresence mode="wait">

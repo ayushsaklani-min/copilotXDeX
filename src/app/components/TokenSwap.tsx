@@ -64,8 +64,9 @@ export default function TokenSwap({
   onStatusChange, 
   onBalancesRefresh 
 }: TokenSwapProps) {
-  const [fromToken, setFromToken] = useState(nativeSymbol);
-  const [toToken, setToToken] = useState(wrappedSymbol);
+  // Prefer WETH -> USDC by default when available, otherwise fall back
+  const [fromToken, setFromToken] = useState(() => (tokens['WETH'] ? 'WETH' : nativeSymbol));
+  const [toToken, setToToken] = useState(() => (tokens['USDC'] ? 'USDC' : wrappedSymbol));
   const [fromAmount, setFromAmount] = useState('');
   const [isSwapping, setIsSwapping] = useState(false);
   const [quote, setQuote] = useState('');
@@ -99,27 +100,44 @@ export default function TokenSwap({
         fromToken === nativeSymbol ? 18 : tokens[fromToken].decimals
       );
 
-      const path = [
-        fromToken === nativeSymbol ? tokens[wrappedSymbol].address : tokens[fromToken].address,
-        toToken === nativeSymbol ? tokens[wrappedSymbol].address : tokens[toToken].address
-      ];
+      const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
+      const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
+      const direct = [addr(fromToken), addr(toToken)];
+      const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
 
-      if (path[0].toLowerCase() === path[1].toLowerCase()) {
-        setQuote(fromAmount);
-        return;
+      const candidatePaths = [direct, viaWrapped].filter(Boolean) as string[][];
+
+      let bestOut: string | null = null;
+      for (const p of candidatePaths) {
+        try {
+          if (p[0].toLowerCase() === p[p.length - 1].toLowerCase()) continue;
+          const amts = await router.getAmountsOut(amountIn, p);
+          const out = ethers.utils.formatUnits(
+            amts[amts.length - 1],
+            toToken === nativeSymbol ? 18 : tokens[toToken].decimals
+          );
+          bestOut = out;
+          break; // first successful path used
+        } catch {
+          // try next path
+        }
       }
 
-      const amounts = await router.getAmountsOut(amountIn, path);
-      const amountOut = ethers.utils.formatUnits(
-        amounts[1],
-        toToken === nativeSymbol ? 18 : tokens[toToken].decimals
-      );
-
-      setQuote(parseFloat(amountOut).toFixed(5));
+      if (!bestOut) throw new Error('No route available for selected pair');
+      setQuote(parseFloat(bestOut).toFixed(5));
     } catch (err) {
       console.error("Quote error:", err);
-      setQuote('');
-      onStatusChange({ message: 'Could not fetch a quote for this pair.', type: 'error' });
+      // Fallback: compute an estimated quote using USD prices if available
+      const pFrom = prices[fromToken];
+      const pTo = prices[toToken];
+      if (pFrom && pTo) {
+        const est = (parseFloat(fromAmount) * pFrom) / pTo;
+        setQuote(est.toFixed(5));
+        onStatusChange({ message: 'Using price-based estimate (DEX route unavailable).', type: 'info' });
+      } else {
+        setQuote('');
+        onStatusChange({ message: 'Could not fetch a quote for this pair.', type: 'error' });
+      }
     } finally {
       setIsQuoteLoading(false);
     }
@@ -215,13 +233,31 @@ export default function TokenSwap({
             const tx = await router.swapExactTokensForETH(amountIn, amountOutMin, path, address, deadline);
             await tx.wait();
           } else {
-            const path = [tokens[fromToken].address, tokens[toToken].address];
-            const amountOutMin = ethers.utils.parseUnits(
-              minAmountOut.toFixed(tokens[toToken].decimals),
-              tokens[toToken].decimals
-            );
-            const tx = await router.swapExactTokensForTokens(amountIn, amountOutMin, path, address, deadline);
-            await tx.wait();
+            const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
+            const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
+            const direct = [addr(fromToken), addr(toToken)];
+            const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
+            const candidatePaths = [direct, viaWrapped].filter(Boolean) as string[][];
+
+            let executed = false;
+            let lastError: unknown = null;
+            for (const p of candidatePaths) {
+              try {
+                const amountOutMin = ethers.utils.parseUnits(
+                  minAmountOut.toFixed(tokens[toToken].decimals),
+                  tokens[toToken].decimals
+                );
+                const tx = await router.swapExactTokensForTokens(amountIn, amountOutMin, p, address, deadline);
+                await tx.wait();
+                executed = true;
+                break;
+              } catch (e) {
+                lastError = e;
+              }
+            }
+            if (!executed) {
+              throw lastError || new Error('No route available for swap');
+            }
           }
         }
       }
@@ -281,22 +317,21 @@ export default function TokenSwap({
                 onChange={(e) => setFromAmount(e.target.value)}
                 className="text-2xl bg-transparent border-none text-white outline-none w-full p-0 font-mono"
               />
-              <div className="flex items-center gap-3 neon-control px-4 py-3 rounded-lg cursor-pointer relative">
+              <div className="flex items-center gap-3 neon-control px-4 py-3 rounded-lg cursor-pointer">
                 <div 
                   className="w-8 h-8 text-white" 
                   dangerouslySetInnerHTML={{ __html: TOKEN_ICONS[fromToken] }} 
                 />
                 <select
-                  className="absolute inset-0 opacity-0 cursor-pointer text-xl"
+                  className="bg-transparent text-white text-xl font-bold outline-none cursor-pointer"
                   value={fromToken}
                   onChange={(e) => setFromToken(e.target.value)}
                 >
-                  <option className="font-bold text-xl" value={nativeSymbol}>{nativeSymbol}</option>
+                  <option className="font-bold text-xl text-black bg-white" value={nativeSymbol}>{nativeSymbol}</option>
                   {Object.keys(tokens).map(t => (
-                    <option className="font-bold text-xl" key={t} value={t}>{t}</option>
+                    <option className="font-bold text-xl text-black bg-white" key={t} value={t}>{t}</option>
                   ))}
                 </select>
-                <span className="font-bold text-xl text-white">{fromToken}</span>
               </div>
             </div>
             <div className="text-lg text-gray-300 mt-1 h-4">
@@ -314,22 +349,21 @@ export default function TokenSwap({
               <div className="text-2xl text-gray-200 text-left">
                 {isQuoteLoading ? '...' : (quote || '0.0')}
               </div>
-              <div className="flex items-center gap-3 neon-control px-4 py-3 rounded-lg cursor-pointer relative">
+              <div className="flex items-center gap-3 neon-control px-4 py-3 rounded-lg cursor-pointer">
                 <div 
                   className="w-8 h-8 text-white" 
                   dangerouslySetInnerHTML={{ __html: TOKEN_ICONS[toToken] }} 
                 />
                 <select
-                  className="absolute inset-0 opacity-0 cursor-pointer text-xl"
+                  className="bg-transparent text-white text-xl font-bold outline-none cursor-pointer"
                   value={toToken}
                   onChange={(e) => setToToken(e.target.value)}
                 >
                   {Object.keys(tokens).map(t => (
-                    <option className="font-bold text-xl" key={t} value={t}>{t}</option>
+                    <option className="font-bold text-xl text-black bg-white" key={t} value={t}>{t}</option>
                   ))}
-                  <option className="font-bold text-xl" value={nativeSymbol}>{nativeSymbol}</option>
+                  <option className="font-bold text-xl text-black bg-white" value={nativeSymbol}>{nativeSymbol}</option>
                 </select>
-                <span className="font-bold text-xl text-white">{toToken}</span>
               </div>
             </div>
             <div className="text-sm text-gray-300 mt-1 h-4">

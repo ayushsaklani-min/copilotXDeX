@@ -34,7 +34,9 @@ const TOKEN_ICONS = {
 };
 
 export default function PortfolioOverview({ isOpen, onToggle, balances, isBalancesLoading, prices, nativeSymbol, tokens }: PortfolioOverviewProps) {
-  const tokenDisplayOrder = [nativeSymbol, ...Object.keys(tokens)];
+  // Display native first, then all discovered balance symbols
+  const discovered = Object.keys(balances).filter(s => s !== nativeSymbol);
+  const tokenDisplayOrder = [nativeSymbol, ...discovered];
   const uniqueOrder = Array.from(new Set(tokenDisplayOrder));
   return (
     <div className="rounded-lg mb-5 neon-card">
