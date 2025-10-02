@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import { wrapToken, isWrapUnwrapOperation, WrapResult } from '../utils/wrapUtils';
+import { useTransactionSimulator } from '../../hooks/useTransactionSimulator';
+import TransactionPreviewModal from '../../components/modals/TransactionPreviewModal';
 
 interface TokenInfo {
   address: string;
@@ -20,7 +23,7 @@ interface Prices {
 interface TokenSwapProps {
   isOpen: boolean;
   onToggle: () => void;
-  signer: ethers.Signer | null;
+  signer: ethers.JsonRpcSigner | null;
   address: string | null;
   balances: Balances;
   prices: Prices;
@@ -32,14 +35,15 @@ interface TokenSwapProps {
   onBalancesRefresh: () => void;
 }
 
-// Narrow and return an EIP-1193 external provider for ethers.js
-const getExternalProvider = (): ethers.providers.ExternalProvider => {
+// Narrow and return an EIP-1193 external provider for ethers.js v6
+const getExternalProvider = (): ethers.Eip1193Provider => {
   const maybeWindow = window as unknown as { ethereum?: unknown };
   if (!maybeWindow.ethereum || typeof maybeWindow.ethereum !== 'object') {
     throw new Error('No injected Ethereum provider found');
   }
-  return maybeWindow.ethereum as ethers.providers.ExternalProvider;
+  return maybeWindow.ethereum as ethers.Eip1193Provider;
 };
+
 const TOKEN_ICONS: Record<string, string> = {
   WMATIC: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M7 12h10M12 7v10" fill="white"/></svg>`,
   MATIC: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4.11,8.34,11.3,4.1a2,2,0,0,1,1.4,0l7.19,4.24a2,2,0,0,1,1,1.76v8.4a2,2,0,0,1-1,1.76l-7.19,4.24a2,2,0,0,1-1.4,0L4.11,20.26a2,2,0,0,1-1-1.76V10.1A2,2,0,0,1,4.11,8.34ZM12,12.27,14.24,11a.5.5,0,0,1,.45,0l1.19.68a.5.5,0,0,1,.26.44v2.19a.5.5,0,0,1-.26.44l-1.19.69a.5.5,0,0,1-.45,0L12,16.73,9.76,18a.5.5,0,0,1-.45,0L8.12,17.29a.5.5,0,0,1,.26-.44V14.66a.5.5,0,0,1,.26-.44l1.19-.68A.5.5,0,0,1,9.76,13.56Z"></path></svg>`,
@@ -72,10 +76,33 @@ export default function TokenSwap({
   const [quote, setQuote] = useState('');
   const [isQuoteLoading, setIsQuoteLoading] = useState(false);
   const [slippage, setSlippage] = useState('0.5');
+  const [showSimulation, setShowSimulation] = useState(false);
+
+  // Transaction simulation hook
+  const { 
+    simulateTransaction, 
+    clearSimulation, 
+    simulationData, 
+    isLoading: isSimulating, 
+    error: simulationError 
+  } = useTransactionSimulator();
 
   const getQuote = async () => {
     if (!address || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken === toToken) {
       setQuote('');
+      return;
+    }
+
+    // Validate that both tokens exist in our token list (except for native token)
+    if (fromToken !== nativeSymbol && !tokens[fromToken]) {
+      setQuote('');
+      onStatusChange({ message: `Unknown token: ${fromToken}`, type: 'error' });
+      return;
+    }
+    
+    if (toToken !== nativeSymbol && !tokens[toToken]) {
+      setQuote('');
+      onStatusChange({ message: `Unknown token: ${toToken}`, type: 'error' });
       return;
     }
 
@@ -88,14 +115,14 @@ export default function TokenSwap({
         return;
       }
 
-      const provider = new ethers.providers.Web3Provider(getExternalProvider());
+      const provider = new ethers.BrowserProvider(getExternalProvider());
       const router = new ethers.Contract(
         uniswapRouterAddress,
         ['function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)'],
         provider
       );
 
-      const amountIn = ethers.utils.parseUnits(
+      const amountIn = ethers.parseUnits(
         fromAmount,
         fromToken === nativeSymbol ? 18 : tokens[fromToken].decimals
       );
@@ -112,7 +139,7 @@ export default function TokenSwap({
         try {
           if (p[0].toLowerCase() === p[p.length - 1].toLowerCase()) continue;
           const amts = await router.getAmountsOut(amountIn, p);
-          const out = ethers.utils.formatUnits(
+          const out = ethers.formatUnits(
             amts[amts.length - 1],
             toToken === nativeSymbol ? 18 : tokens[toToken].decimals
           );
@@ -123,11 +150,26 @@ export default function TokenSwap({
         }
       }
 
-      if (!bestOut) throw new Error('No route available for selected pair');
+      if (!bestOut) {
+        console.warn('No DEX route available for selected pair, falling back to price estimation');
+        // Fallback: compute an estimated quote using USD prices if available
+        const pFrom = prices[fromToken];
+        const pTo = prices[toToken];
+        if (pFrom && pTo) {
+          const est = (parseFloat(fromAmount) * pFrom) / pTo;
+          setQuote(est.toFixed(5));
+          onStatusChange({ message: 'Using price-based estimate (DEX route unavailable).', type: 'info' });
+          return;
+        } else {
+          setQuote('');
+          onStatusChange({ message: 'Could not fetch a quote for this pair.', type: 'error' });
+          return;
+        }
+      }
       setQuote(parseFloat(bestOut).toFixed(5));
     } catch (err) {
       console.error("Quote error:", err);
-      // Fallback: compute an estimated quote using USD prices if available
+      // Use the same fallback logic as when no route is available
       const pFrom = prices[fromToken];
       const pTo = prices[toToken];
       if (pFrom && pTo) {
@@ -150,114 +192,238 @@ export default function TokenSwap({
     return () => clearTimeout(timeoutId);
   }, [fromAmount, fromToken, toToken, address]);
 
+  // Create unsigned transaction for simulation
+  const createUnsignedTransaction = async () => {
+    if (!signer || !fromAmount || parseFloat(fromAmount) <= 0 || !quote) {
+      throw new Error('Invalid amount or quote');
+    }
+
+    // Check if this is a wrap/unwrap operation
+    if (isWrapUnwrapOperation(fromToken, toToken, nativeSymbol, wrappedSymbol)) {
+      const isWrapping = fromToken === nativeSymbol;
+      const wrappedTokenAddress = tokens[wrappedSymbol].address;
+      
+      if (isWrapping) {
+        return {
+          to: wrappedTokenAddress,
+          data: '0xd0e30db0', // deposit() function selector
+          value: ethers.parseEther(fromAmount).toString(),
+          gas: '0x5208' // 21000 gas
+        };
+      } else {
+        const amountUnits = ethers.parseUnits(fromAmount, tokens[wrappedSymbol].decimals);
+        const withdrawData = ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [amountUnits]);
+        return {
+          to: wrappedTokenAddress,
+          data: '0x2e1a7d4d' + withdrawData.slice(2), // withdraw(uint256) function selector + encoded amount
+          value: '0x0',
+          gas: '0x5208'
+        };
+      }
+    }
+
+    // For DEX swaps, create the appropriate transaction
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+    const slippageTolerance = parseFloat(slippage) || 0.5;
+    const slippageAmount = (parseFloat(quote) * slippageTolerance) / 100;
+    const minAmountOut = parseFloat(quote) - slippageAmount;
+
+    if (fromToken === nativeSymbol) {
+      const amountIn = ethers.parseEther(fromAmount);
+      const path = [tokens[wrappedSymbol].address, tokens[toToken].address];
+      const amountOutMin = ethers.parseUnits(
+        minAmountOut.toFixed(tokens[toToken].decimals),
+        tokens[toToken].decimals
+      );
+
+      // Encode swapExactETHForTokens call
+      const swapData = ethers.AbiCoder.defaultAbiCoder().encode(
+        ['uint256', 'address[]', 'address', 'uint256'],
+        [amountOutMin, path, address, deadline]
+      );
+      
+      return {
+        to: uniswapRouterAddress,
+        data: '0x7ff36ab5' + swapData.slice(2), // swapExactETHForTokens function selector
+        value: amountIn.toString(),
+        gas: '0x186a0' // 100000 gas
+      };
+    } else {
+      const amountIn = ethers.parseUnits(fromAmount, tokens[fromToken].decimals);
+      
+      if (toToken === nativeSymbol) {
+        const path = [tokens[fromToken].address, tokens[wrappedSymbol].address];
+        const amountOutMin = ethers.parseUnits(minAmountOut.toFixed(18), 18);
+        
+        const swapData = ethers.AbiCoder.defaultAbiCoder().encode(
+          ['uint256', 'uint256', 'address[]', 'address', 'uint256'],
+          [amountIn, amountOutMin, path, address, deadline]
+        );
+        
+        return {
+          to: uniswapRouterAddress,
+          data: '0x18cbafe5' + swapData.slice(2), // swapExactTokensForETH function selector
+          value: '0x0',
+          gas: '0x186a0'
+        };
+      } else {
+        const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
+        const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
+        const direct = [addr(fromToken), addr(toToken)];
+        const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
+        const path = direct; // Use direct path for simulation
+        
+        const amountOutMin = ethers.parseUnits(
+          minAmountOut.toFixed(tokens[toToken].decimals),
+          tokens[toToken].decimals
+        );
+        
+        const swapData = ethers.AbiCoder.defaultAbiCoder().encode(
+          ['uint256', 'uint256', 'address[]', 'address', 'uint256'],
+          [amountIn, amountOutMin, path, address, deadline]
+        );
+        
+        return {
+          to: uniswapRouterAddress,
+          data: '0x38ed1739' + swapData.slice(2), // swapExactTokensForTokens function selector
+          value: '0x0',
+          gas: '0x186a0'
+        };
+      }
+    }
+  };
+
+  // Handle swap button click - trigger simulation
   const handleSwap = async () => {
     if (!signer || !fromAmount || parseFloat(fromAmount) <= 0 || !quote) {
       onStatusChange({ message: 'Invalid amount or quote.', type: 'error' });
       return;
     }
 
+    try {
+      const unsignedTx = await createUnsignedTransaction();
+      const provider = signer.provider;
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
+      
+      setShowSimulation(true);
+      await simulateTransaction(unsignedTx, chainId);
+    } catch (error) {
+      console.error("Failed to create transaction for simulation:", error);
+      onStatusChange({ message: 'Failed to prepare transaction for simulation.', type: 'error' });
+    }
+  };
+
+  // Handle actual swap execution (called from modal)
+  const executeSwap = async () => {
+    if (!signer || !fromAmount || parseFloat(fromAmount) <= 0 || !quote) {
+      onStatusChange({ message: 'Invalid amount or quote.', type: 'error' });
+      return;
+    }
+
     setIsSwapping(true);
-    onStatusChange({ message: 'Initiating swap...', type: 'info' });
+    onStatusChange({ message: 'Executing swap...', type: 'info' });
 
     try {
-      // Handle native <-> wrapped wrapping without router
-      if ((fromToken === nativeSymbol && toToken === wrappedSymbol) || (fromToken === wrappedSymbol && toToken === nativeSymbol)) {
-        const wmatic = new ethers.Contract(
-          tokens[wrappedSymbol].address,
-          [
-            'function deposit() public payable',
-            'function withdraw(uint wad) public'
-          ],
+      // Check if this is a wrap/unwrap operation
+      if (isWrapUnwrapOperation(fromToken, toToken, nativeSymbol, wrappedSymbol)) {
+        const isWrapping = fromToken === nativeSymbol;
+        const wrappedTokenAddress = tokens[wrappedSymbol].address;
+        const wrappedTokenDecimals = tokens[wrappedSymbol].decimals;
+        
+        const result: WrapResult = await wrapToken({
+          signer,
+          amount: fromAmount,
+          wrappedTokenAddress,
+          wrappedTokenDecimals,
+          isWrapping
+        });
+        
+        if (result.success) {
+          onStatusChange({ message: `${isWrapping ? 'Wrap' : 'Unwrap'} successful!`, type: 'success' });
+          await onBalancesRefresh();
+        } else {
+          onStatusChange({ message: result.error || 'Wrap/Unwrap failed', type: 'error' });
+        }
+        return;
+      }
+
+      // Safety: ensure router address is a contract to avoid sending funds to an EOA
+      const onchainProvider = signer.provider;
+      const routerCode = await onchainProvider.getCode(uniswapRouterAddress);
+      if (!routerCode || routerCode === '0x') {
+        throw new Error('Router address has no code on this network. Provide a valid DEX router.');
+      }
+
+      const router = new ethers.Contract(
+      uniswapRouterAddress,
+      [
+        'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable',
+        'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
+        'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
+        'function approve(address spender, uint256 amount) external returns (bool)'
+      ],
+      signer
+      );
+
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+      const slippageTolerance = parseFloat(slippage) || 0.5;
+      const slippageAmount = (parseFloat(quote) * slippageTolerance) / 100;
+      const minAmountOut = parseFloat(quote) - slippageAmount;
+
+      if (fromToken === nativeSymbol) {
+        const amountIn = ethers.parseEther(fromAmount);
+        const path = [tokens[wrappedSymbol].address, tokens[toToken].address];
+        const amountOutMin = ethers.parseUnits(
+          minAmountOut.toFixed(tokens[toToken].decimals),
+          tokens[toToken].decimals
+        );
+
+        const tx = await router.swapExactETHForTokens(amountOutMin, path, address, deadline, {
+          value: amountIn
+        });
+        await tx.wait();
+      } else {
+        const fromTokenContract = new ethers.Contract(
+          tokens[fromToken].address,
+          ['function approve(address spender, uint256 amount) external returns (bool)'],
           signer
         );
 
-        if (fromToken === nativeSymbol) {
-          const amountIn = ethers.utils.parseEther(fromAmount);
-          const tx = await wmatic.deposit({ value: amountIn });
+        const amountIn = ethers.parseUnits(fromAmount, tokens[fromToken].decimals);
+        const approveTx = await fromTokenContract.approve(uniswapRouterAddress, amountIn);
+        await approveTx.wait();
+
+        if (toToken === nativeSymbol) {
+          const path = [tokens[fromToken].address, tokens[wrappedSymbol].address];
+          const amountOutMin = ethers.parseUnits(minAmountOut.toFixed(18), 18);
+          const tx = await router.swapExactTokensForETH(amountIn, amountOutMin, path, address, deadline);
           await tx.wait();
         } else {
-          const amountIn = ethers.utils.parseUnits(fromAmount, tokens[wrappedSymbol].decimals);
-          const tx = await wmatic.withdraw(amountIn);
-          await tx.wait();
-        }
-      } else {
-        // Safety: ensure router address is a contract to avoid sending funds to an EOA
-        const onchainProvider = signer.provider as ethers.providers.Provider;
-        const routerCode = await onchainProvider.getCode(uniswapRouterAddress);
-        if (!routerCode || routerCode === '0x') {
-          throw new Error('Router address has no code on this network. Provide a valid DEX router.');
-        }
+          const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
+          const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
+          const direct = [addr(fromToken), addr(toToken)];
+          const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
+          const candidatePaths = [direct, viaWrapped].filter(Boolean) as string[][];
 
-        const router = new ethers.Contract(
-        uniswapRouterAddress,
-        [
-          'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable',
-          'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
-          'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external',
-          'function approve(address spender, uint256 amount) external returns (bool)'
-        ],
-        signer
-        );
-
-        const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
-        const slippageTolerance = parseFloat(slippage) || 0.5;
-        const slippageAmount = (parseFloat(quote) * slippageTolerance) / 100;
-        const minAmountOut = parseFloat(quote) - slippageAmount;
-
-        if (fromToken === nativeSymbol) {
-          const amountIn = ethers.utils.parseEther(fromAmount);
-          const path = [tokens[wrappedSymbol].address, tokens[toToken].address];
-          const amountOutMin = ethers.utils.parseUnits(
-            minAmountOut.toFixed(tokens[toToken].decimals),
-            tokens[toToken].decimals
-          );
-
-          const tx = await router.swapExactETHForTokens(amountOutMin, path, address, deadline, {
-            value: amountIn
-          });
-          await tx.wait();
-        } else {
-          const fromTokenContract = new ethers.Contract(
-            tokens[fromToken].address,
-            ['function approve(address spender, uint256 amount) external returns (bool)'],
-            signer
-          );
-
-          const amountIn = ethers.utils.parseUnits(fromAmount, tokens[fromToken].decimals);
-          const approveTx = await fromTokenContract.approve(uniswapRouterAddress, amountIn);
-          await approveTx.wait();
-
-          if (toToken === nativeSymbol) {
-            const path = [tokens[fromToken].address, tokens[wrappedSymbol].address];
-            const amountOutMin = ethers.utils.parseUnits(minAmountOut.toFixed(18), 18);
-            const tx = await router.swapExactTokensForETH(amountIn, amountOutMin, path, address, deadline);
-            await tx.wait();
-          } else {
-            const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
-            const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
-            const direct = [addr(fromToken), addr(toToken)];
-            const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
-            const candidatePaths = [direct, viaWrapped].filter(Boolean) as string[][];
-
-            let executed = false;
-            let lastError: unknown = null;
-            for (const p of candidatePaths) {
-              try {
-                const amountOutMin = ethers.utils.parseUnits(
-                  minAmountOut.toFixed(tokens[toToken].decimals),
-                  tokens[toToken].decimals
-                );
-                const tx = await router.swapExactTokensForTokens(amountIn, amountOutMin, p, address, deadline);
-                await tx.wait();
-                executed = true;
-                break;
-              } catch (e) {
-                lastError = e;
-              }
+          let executed = false;
+          let lastError: unknown = null;
+          for (const p of candidatePaths) {
+            try {
+              const amountOutMin = ethers.parseUnits(
+                minAmountOut.toFixed(tokens[toToken].decimals),
+                tokens[toToken].decimals
+              );
+              const tx = await router.swapExactTokensForTokens(amountIn, amountOutMin, p, address, deadline);
+              await tx.wait();
+              executed = true;
+              break;
+            } catch (e) {
+              lastError = e;
             }
-            if (!executed) {
-              throw lastError || new Error('No route available for swap');
-            }
+          }
+          if (!executed) {
+            throw lastError || new Error('No route available for swap');
           }
         }
       }
@@ -275,7 +441,15 @@ export default function TokenSwap({
       setIsSwapping(false);
       setFromAmount('');
       setQuote('');
+      setShowSimulation(false);
+      clearSimulation();
     }
+  };
+
+  // Handle simulation modal close
+  const handleSimulationClose = () => {
+    setShowSimulation(false);
+    clearSimulation();
   };
 
   return (
@@ -376,10 +550,20 @@ export default function TokenSwap({
             onClick={handleSwap}
             disabled={isSwapping || isQuoteLoading || !fromAmount || parseFloat(fromAmount) <= 0}
           >
-            {isSwapping ? 'Swapping...' : 'Swap'}
+            {isSwapping ? 'Swapping...' : 'Preview & Swap'}
           </button>
         </div>
       </div>
+
+      {/* Transaction Preview Modal */}
+      <TransactionPreviewModal
+        isOpen={showSimulation}
+        onClose={handleSimulationClose}
+        onConfirm={executeSwap}
+        simulationData={simulationData}
+        isLoading={isSimulating}
+        error={simulationError}
+      />
     </div>
   );
 }

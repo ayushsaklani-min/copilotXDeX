@@ -8,6 +8,7 @@ import ConnectBackground from './ConnectBackground';
 import PortfolioOverview from './PortfolioOverview';
 import AIAssistant from './AIAssistant';
 import TokenSwap from './TokenSwap';
+import MockSwap from './MockSwap';
 
 interface Status {
   message: string;
@@ -45,13 +46,13 @@ interface AlchemyTokenMetadataItem {
   logo?: string | null;
 }
 
-// Narrow and return an EIP-1193 external provider for ethers.js
-const getExternalProvider = (): ethers.providers.ExternalProvider => {
+// Narrow and return an EIP-1193 external provider for ethers.js v6
+const getExternalProvider = (): ethers.Eip1193Provider => {
   const maybeWindow = window as unknown as { ethereum?: unknown };
   if (!maybeWindow.ethereum || typeof maybeWindow.ethereum !== 'object') {
     throw new Error('No injected Ethereum provider found');
   }
-  return maybeWindow.ethereum as ethers.providers.ExternalProvider;
+  return maybeWindow.ethereum as ethers.Eip1193Provider;
 };
 const AMOY_CHAIN_ID = '0x13882';
 const SEPOLIA_CHAIN_ID = '0xaa36a7';
@@ -91,7 +92,7 @@ const NETWORKS = {
     routerAddress: process.env.NEXT_PUBLIC_SEPOLIA_ROUTER_ADDRESS || '',
     tokens: {
       // Canonical WETH on Sepolia
-      'WETH': { address: '0xdd13E55209Fd76AfE204dBda4007C227904f0a81', decimals: 18, coingeckoId: 'weth' },
+      'WETH': { address: '0xfFf9976782D46CC05630D1f6eBAb18B2324d6B14', decimals: 18, coingeckoId: 'weth' },
       // DAI and USDC on Sepolia (env override supported)
       'DAI':  { address: (process.env.NEXT_PUBLIC_SEPOLIA_DAI_ADDRESS as string) || '0x68194a729C2450ad26072b3D33ADaCbcef39D574', decimals: 18, coingeckoId: 'dai' },
       'USDC': { address: (process.env.NEXT_PUBLIC_SEPOLIA_USDC_ADDRESS as string) || '0x94a9D9AC8a22534E3FaCa4E4343A41133453d586', decimals: 6, coingeckoId: 'usd-coin' }
@@ -103,7 +104,7 @@ const NETWORKS = {
 type NetworkKey = keyof typeof NETWORKS;
 
 export default function Web3Copilot() {
-  const [signer, setSigner] = useState<ethers.Signer | null>(null);
+  const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ message: '', type: '' });
   const [openSection, setOpenSection] = useState<string | null>('overview');
@@ -119,52 +120,83 @@ export default function Web3Copilot() {
     let cleanup: (() => void) | undefined;
     try {
       const ext = getExternalProvider();
-      const provider = new ethers.providers.Web3Provider(ext, 'any');
+      const provider = new ethers.BrowserProvider(ext);
 
       // Immediately probe connection without forcing a connect
       (async () => {
         try {
           const accounts = await provider.listAccounts();
-          const net = await provider.getNetwork();
+          let net;
+          try {
+            net = await provider.getNetwork();
+          } catch (networkError) {
+            console.log('Initial network detection error:', networkError);
+            // If we can't get network, default to amoy
+            setNetworkKey('amoy');
+            return;
+          }
+          
           if (accounts.length > 0) {
-            const detectedKey: NetworkKey = net.chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+            const detectedKey: NetworkKey = Number(net.chainId) === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
             setNetworkKey(detectedKey);
-            const detectedSigner = provider.getSigner();
+            const detectedSigner = await provider.getSigner();
+            const userAddress = await detectedSigner.getAddress();
             setSigner(detectedSigner);
-            setAddress(accounts[0]);
+            setAddress(userAddress);
           } else {
             // No account connected: still reflect current network in UI
-            const detectedKey: NetworkKey = net.chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+            const detectedKey: NetworkKey = Number(net.chainId) === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
             setNetworkKey(detectedKey);
           }
-        } catch {}
+        } catch (error) {
+          console.log('Initial connection probe error:', error);
+          // Default to amoy if we can't detect anything
+          setNetworkKey('amoy');
+        }
       })();
 
-      const handleChainChanged = async (_chainIdHex: string) => {
-        const net = await provider.getNetwork();
-        const detectedKey: NetworkKey = net.chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
-        setNetworkKey(detectedKey);
+      const handleChainChanged = async (chainIdHex: unknown) => {
         try {
-          const newSigner = provider.getSigner();
-          const userAddress = await newSigner.getAddress();
-          setSigner(newSigner);
-          setAddress(userAddress);
-          await fetchPrices(detectedKey);
-          await fetchBalances({ signerOverride: newSigner, addressOverride: userAddress, networkOverride: detectedKey });
-        } catch {
-          // likely no address selected yet
-          setSigner(null);
-          setAddress(null);
+          // Determine network from chainIdHex to avoid getNetwork() calls during network changes
+          const chainId = typeof chainIdHex === 'string' ? parseInt(chainIdHex, 16) : 0;
+          const detectedKey: NetworkKey = chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+          setNetworkKey(detectedKey);
+          
+          // Wait a bit for the network change to settle
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          try {
+            // Create a fresh provider instance to avoid network change errors
+            const freshProvider = new ethers.BrowserProvider(ext);
+            const newSigner = await freshProvider.getSigner();
+            const userAddress = await newSigner.getAddress();
+            setSigner(newSigner);
+            setAddress(userAddress);
+            await fetchPrices(detectedKey);
+            await fetchBalances({ signerOverride: newSigner, addressOverride: userAddress, networkOverride: detectedKey });
+          } catch {
+            // likely no address selected yet
+            setSigner(null);
+            setAddress(null);
+            await fetchPrices(detectedKey);
+          }
+        } catch (error) {
+          console.log('Network change handling error:', error);
+          // Fallback: determine from chainIdHex
+          const chainId = typeof chainIdHex === 'string' ? parseInt(chainIdHex, 16) : 0;
+          const detectedKey: NetworkKey = chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+          setNetworkKey(detectedKey);
           await fetchPrices(detectedKey);
         }
       };
 
-      const handleAccountsChanged = async (accounts: string[]) => {
-        if (accounts && accounts.length > 0) {
-          const newSigner = provider.getSigner();
+      const handleAccountsChanged = async (accounts: unknown) => {
+        const accountList = accounts as string[];
+        if (accountList && accountList.length > 0) {
+          const newSigner = await provider.getSigner();
           setSigner(newSigner);
-          setAddress(accounts[0]);
-          await fetchBalances({ signerOverride: newSigner, addressOverride: accounts[0] });
+          setAddress(accountList[0]);
+          await fetchBalances({ signerOverride: newSigner, addressOverride: accountList[0] });
         } else {
           setSigner(null);
           setAddress(null);
@@ -173,13 +205,13 @@ export default function Web3Copilot() {
       };
 
       // Subscribe to EIP-1193 events
-      (ext as unknown as { on: (event: string, cb: (...args: any[]) => void) => void }).on('chainChanged', handleChainChanged);
-      (ext as unknown as { on: (event: string, cb: (...args: any[]) => void) => void }).on('accountsChanged', handleAccountsChanged);
+      (ext as unknown as { on: (event: string, cb: (...args: unknown[]) => void) => void }).on('chainChanged', handleChainChanged);
+      (ext as unknown as { on: (event: string, cb: (...args: unknown[]) => void) => void }).on('accountsChanged', handleAccountsChanged);
 
       cleanup = () => {
         try {
-          (ext as unknown as { removeListener: (event: string, cb: (...args: any[]) => void) => void }).removeListener('chainChanged', handleChainChanged);
-          (ext as unknown as { removeListener: (event: string, cb: (...args: any[]) => void) => void }).removeListener('accountsChanged', handleAccountsChanged);
+          (ext as unknown as { removeListener: (event: string, cb: (...args: unknown[]) => void) => void }).removeListener('chainChanged', handleChainChanged);
+          (ext as unknown as { removeListener: (event: string, cb: (...args: unknown[]) => void) => void }).removeListener('accountsChanged', handleAccountsChanged);
         } catch {}
       };
     } catch {}
@@ -246,8 +278,8 @@ export default function Web3Copilot() {
         params: [{ chainId: NETWORKS[target].chainIdHex }]
       });
       // keep the existing address; just rebind the signer to new provider
-      const newProvider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
-      const newSigner = newProvider.getSigner();
+      const newProvider = new ethers.BrowserProvider(getExternalProvider());
+      const newSigner = await newProvider.getSigner();
       const userAddress = await newSigner.getAddress();
       setSigner(newSigner);
       setAddress(userAddress);
@@ -299,34 +331,82 @@ export default function Web3Copilot() {
     setStatus({ message: '', type: '' });
     // fire rocket animation immediately
     setLaunchId(prev => prev + 1);
+    
     if (typeof (window as unknown as { ethereum?: unknown }).ethereum === 'undefined') {
-      setStatus({ message: 'MetaMask is not installed!', type: 'error' });
+      setStatus({ message: 'MetaMask is not installed! Please install MetaMask extension.', type: 'error' });
       return;
     }
 
     try {
-      const web3Provider = new ethers.providers.Web3Provider(getExternalProvider(), 'any');
+      const web3Provider = new ethers.BrowserProvider(getExternalProvider());
+      
+      // Request account access
       await web3Provider.send("eth_requestAccounts", []);
+      
+      // Get current network
       const { chainId } = await web3Provider.getNetwork();
-      // Ensure we are on the user-selected network
+      const currentChainId = Number(chainId);
+      
+      // Check if we need to switch networks
       const desired = NETWORKS[networkKey];
-      if (chainId !== desired.chainIdDec) {
-        await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: desired.chainIdHex }]
-        });
+      if (currentChainId !== desired.chainIdDec) {
+        try {
+          await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: desired.chainIdHex }]
+          });
+        } catch (switchError: unknown) {
+          const err = switchError as { code?: number; message?: string };
+          if (err.code === 4902) {
+            // Network not added to MetaMask, try to add it
+            try {
+              await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: desired.chainIdHex,
+                  chainName: desired.name,
+                  rpcUrls: [desired.alchemyUrl],
+                  nativeCurrency: {
+                    name: desired.nativeSymbol,
+                    symbol: desired.nativeSymbol,
+                    decimals: 18
+                  }
+                }]
+              });
+            } catch {
+              setStatus({ message: `Failed to add ${desired.name} network to MetaMask. Please add it manually.`, type: 'error' });
+              return;
+            }
+          } else {
+            setStatus({ message: `Failed to switch to ${desired.name}. Please switch manually in MetaMask.`, type: 'error' });
+            return;
+          }
+        }
       }
 
+      // Get final network after potential switch
       const finalNetwork = await web3Provider.getNetwork();
-      const detectedKey: NetworkKey = finalNetwork.chainId === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
+      const detectedKey: NetworkKey = Number(finalNetwork.chainId) === NETWORKS.sepolia.chainIdDec ? 'sepolia' : 'amoy';
       setNetworkKey(detectedKey);
 
-      const web3Signer = web3Provider.getSigner();
+      // Get signer and address
+      const web3Signer = await web3Provider.getSigner();
       const userAddress = await web3Signer.getAddress();
       setSigner(web3Signer);
       setAddress(userAddress);
-    } catch (_e) {
-      setStatus({ message: 'Wallet connection rejected or failed.', type: 'error' });
+      
+      setStatus({ message: 'Wallet connected successfully!', type: 'success' });
+    } catch (error: unknown) {
+      console.error('Connection error:', error);
+      const err = error as { code?: number; message?: string };
+      
+      if (err.code === 4001) {
+        setStatus({ message: 'Connection rejected by user. Please try again.', type: 'error' });
+      } else if (err.message?.includes('User rejected')) {
+        setStatus({ message: 'Connection rejected by user. Please try again.', type: 'error' });
+      } else {
+        setStatus({ message: `Connection failed: ${err.message || 'Unknown error'}. Please try again.`, type: 'error' });
+      }
     }
   };
 
@@ -344,8 +424,10 @@ export default function Web3Copilot() {
       const newBalances: Balances = {};
 
       // Get native balance
-      const nativeBalanceWei = await effectiveSigner.getBalance();
-      newBalances[net.nativeSymbol] = parseFloat(ethers.utils.formatEther(nativeBalanceWei)).toFixed(4);
+      const provider = effectiveSigner.provider;
+      if (!provider) throw new Error('No provider available');
+      const nativeBalanceWei = await provider.getBalance(effectiveAddress);
+      newBalances[net.nativeSymbol] = parseFloat(ethers.formatEther(nativeBalanceWei)).toFixed(4);
 
       // 1) Discover all token balances (all ERC20s) for the address
       const tbResponse = await fetch(net.alchemyUrl, {
@@ -424,7 +506,7 @@ export default function Web3Copilot() {
       });
 
       // For tokens with balances but missing metadata, fetch on-chain ERC20 symbol/decimals
-      const providerForChain = (effectiveSigner.provider as ethers.providers.Provider) ?? new ethers.providers.Web3Provider(getExternalProvider());
+      const providerForChain = effectiveSigner.provider ?? new ethers.BrowserProvider(getExternalProvider());
       const erc20Abi = [
         'function symbol() view returns (string)',
         'function decimals() view returns (uint8)'
@@ -452,7 +534,7 @@ export default function Web3Copilot() {
         const meta = addressToMeta.get(t.contractAddress.toLowerCase());
         if (!meta) return;
         try {
-          const balance = ethers.utils.formatUnits(t.tokenBalance, meta.decimals);
+          const balance = ethers.formatUnits(t.tokenBalance, meta.decimals);
           // Avoid overriding native symbol
           if (meta.symbol && meta.symbol.toUpperCase() !== net.nativeSymbol.toUpperCase()) {
             newBalances[meta.symbol.toUpperCase()] = parseFloat(balance).toFixed(4);
@@ -581,6 +663,15 @@ export default function Web3Copilot() {
                 <option value="sepolia">Ethereum Sepolia</option>
               </select>
             </div>
+            
+            {/* Network configuration help */}
+            <div className="text-center text-sm text-gray-300 mb-4">
+              <p>If connection fails, make sure you have the correct network added to MetaMask:</p>
+              <div className="mt-2 space-y-1">
+                <p><strong>Ethereum Sepolia:</strong> Chain ID 11155111</p>
+                <p><strong>Polygon Amoy:</strong> Chain ID 80002</p>
+              </div>
+            </div>
             <motion.button
               whileHover={{ y: -2, boxShadow: '6px 6px 0 #000' }}
               whileTap={{ y: 0, boxShadow: '2px 2px 0 #000' }}
@@ -698,6 +789,14 @@ export default function Web3Copilot() {
               uniswapRouterAddress={NETWORKS[networkKey].routerAddress}
               onStatusChange={setStatus}
               onBalancesRefresh={fetchBalances}
+            />
+
+            <MockSwap
+              isOpen={openSection === 'mockswap'}
+              onToggle={() => handleToggleSection('mockswap')}
+              signer={signer}
+              address={address}
+              onStatusChange={setStatus}
             />
               </div>
             </div>
