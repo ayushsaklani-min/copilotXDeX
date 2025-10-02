@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESSES, ERC20_ABI, MOCK_SWAP_ABI } from '../../constants/contracts';
 
@@ -91,7 +91,7 @@ export default function MockSwap({
   };
 
   // Fetch balances and swap data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!signer || !address) return;
 
     setIsLoading(true);
@@ -169,14 +169,14 @@ export default function MockSwap({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [signer, address, onStatusChange]);
 
   // Fetch data when wallet connects or component opens
   useEffect(() => {
     if (isConnected && isOpen) {
       fetchData();
     }
-  }, [isConnected, isOpen]);
+  }, [isConnected, isOpen, fetchData]);
 
   // Approve TokenA for MockSwap contract
   const handleApprove = async () => {

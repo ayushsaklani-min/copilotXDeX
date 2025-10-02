@@ -157,9 +157,9 @@ export default function MockSwapDemo() {
               <li>Connect your MetaMask wallet</li>
               <li>Make sure you have some TokenA (TKA) in your wallet</li>
               <li>Enter the amount of TKA you want to swap</li>
-              <li>Click "Approve" to allow the MockSwap contract to spend your TKA</li>
-              <li>Once approved, click "Swap" to execute the exchange</li>
-              <li>You'll receive TokenB (TKB) based on the current exchange rate</li>
+              <li>Click &quot;Approve&quot; to allow the MockSwap contract to spend your TKA</li>
+              <li>Once approved, click &quot;Swap&quot; to execute the exchange</li>
+              <li>You&apos;ll receive TokenB (TKB) based on the current exchange rate</li>
             </ol>
           </div>
         </div>
