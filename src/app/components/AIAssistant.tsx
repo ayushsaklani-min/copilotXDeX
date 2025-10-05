@@ -1,15 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 
-interface Balances {
-  [key: string]: string;
-}
-
-interface ConversationMessage {
-  role: 'user' | 'ai';
-  parts: Array<{ text: string }>;
-}
 
 interface AIAssistantProps {
   onQuery: (query: string) => void;

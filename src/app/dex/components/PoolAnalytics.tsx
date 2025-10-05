@@ -3,26 +3,23 @@
 import { useState, useEffect, useRef } from 'react';
 
 interface PoolAnalyticsProps {
-  signer: any;
+  signer: unknown;
   address: string | null;
   isConnected: boolean;
   isCorrectNetwork: boolean;
-  dex: any;
+  dex: { pairs?: Array<{ name: string; reserve0: number; reserve1: number }> };
   prices: Record<string, number>;
 }
 
 export default function PoolAnalytics({
-  signer,
-  address,
   isConnected,
   isCorrectNetwork,
   dex,
   prices,
 }: PoolAnalyticsProps) {
   const [timeframe, setTimeframe] = useState<'24h' | '7d' | '30d'>('24h');
-  const [volumeData, setVolumeData] = useState<any[]>([]);
-  const [tvlData, setTvlData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [volumeData, setVolumeData] = useState<Array<{ time: string; volume: number; trades: number }>>([]);
+  const [tvlData, setTvlData] = useState<Array<{ time: string; tvl: number }>>([]);
 
   // Small SVG chart components (no external deps)
   const SimpleBarChart = ({ data, height = 300 }: { data: { volume: number; trades?: number; time: string }[]; height?: number }) => {
@@ -182,8 +179,8 @@ export default function PoolAnalytics({
   const generateMockData = () => {
     const dataPoints = timeframe === '24h' ? 24 : timeframe === '7d' ? 7 : 30;
     const interval = timeframe === '24h' ? 1 : timeframe === '7d' ? 1 : 1;
-    const nextVolumeData: any[] = [];
-    const nextTvlData: any[] = [];
+    const nextVolumeData: Array<{ time: string; volume: number; trades: number }> = [];
+    const nextTvlData: Array<{ time: string; tvl: number }> = [];
     for (let i = 0; i < dataPoints; i++) {
       const timestamp = new Date();
       timestamp.setHours(timestamp.getHours() - (dataPoints - i) * interval);
@@ -313,7 +310,7 @@ export default function PoolAnalytics({
               </tr>
             </thead>
             <tbody>
-              {dex.pairs?.map((pair: any) => (
+              {dex.pairs?.map((pair) => (
                 <tr key={pair.name} className="border-b border-gray-800">
                   <td className="py-3 px-4 text-white font-semibold">{pair.name}</td>
                   <td className="py-3 px-4 text-gray-300">

@@ -28,6 +28,7 @@ interface UseSwapReturn {
   swapTokens: (params: SwapParams) => Promise<SwapResult | null>;
   estimateOutput: (params: SwapParams) => Promise<string | null>;
   checkAllowance: (tokenSymbol: string, amount: string) => Promise<boolean>;
+  syncReserves: () => Promise<boolean>;
 }
 
 export const useTikTakToeSwap = (
@@ -106,20 +107,20 @@ export const useTikTakToeSwap = (
         swapContract.reserve(tokenOut.address)
       ]);
 
-      if (reserveIn === 0n || reserveOut === 0n) {
+      if (reserveIn === BigInt(0) || reserveOut === BigInt(0)) {
         return '0';
       }
 
       const amountInWei = ethers.parseUnits(params.amountIn, tokenIn.decimals);
       
       // Apply the formula: amountInWithFee = amountIn * 997
-      const amountInWithFee = amountInWei * 997n;
+      const amountInWithFee = amountInWei * BigInt(997);
       
       // numerator = amountInWithFee * reserveOut
       const numerator = amountInWithFee * reserveOut;
       
       // denominator = (reserveIn * 1000) + amountInWithFee
-      const denominator = (reserveIn * 1000n) + amountInWithFee;
+      const denominator = (reserveIn * BigInt(1000)) + amountInWithFee;
       
       // amountOut = numerator / denominator
       const amountOutWei = numerator / denominator;
@@ -169,7 +170,7 @@ export const useTikTakToeSwap = (
         amountIn: amountInWei.toString()
       });
 
-      if (reserveIn === 0n || reserveOut === 0n) {
+      if (reserveIn === BigInt(0) || reserveOut === BigInt(0)) {
         throw new Error(`Insufficient reserves: ${tokenIn.symbol} reserve: ${reserveIn.toString()}, ${tokenOut.symbol} reserve: ${reserveOut.toString()}`);
       }
 

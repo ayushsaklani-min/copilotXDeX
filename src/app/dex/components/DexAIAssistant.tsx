@@ -181,10 +181,10 @@ Provide specific, actionable advice based on the current pool data and user's ho
               <br /><br />
               <div className="text-sm">
                 <strong>Try asking:</strong>
-                <br />• "What's the best pool to add liquidity to?"
-                <br />• "How much can I earn from TIK-TOE pool?"
-                <br />• "Should I swap my TIK for TOE now?"
-                <br />• "What's my portfolio performance?"
+                <br />• &quot;What&apos;s the best pool to add liquidity to?&quot;
+                <br />• &quot;How much can I earn from TIK-TOE pool?&quot;
+                <br />• &quot;Should I swap my TIK for TOE now?&quot;
+                <br />• &quot;What&apos;s my portfolio performance?&quot;
               </div>
             </div>
           )}

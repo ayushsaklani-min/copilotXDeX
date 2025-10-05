@@ -100,7 +100,7 @@ export function useLiquidity(signer: ethers.JsonRpcSigner | null, address: strin
       console.error('Error getting LP balance:', error);
       return '0';
     }
-  }, [signer, address]);
+  }, [signer, address, poolConfigs]);
 
   // Refresh all pool data
   const refreshPools = useCallback(async () => {
@@ -156,7 +156,7 @@ export function useLiquidity(signer: ethers.JsonRpcSigner | null, address: strin
     } finally {
       setIsLoading(false);
     }
-  }, [signer, address]);
+  }, [signer, address, poolConfigs]);
 
   // Add liquidity to a pool
   const addLiquidity = useCallback(async (
@@ -192,9 +192,10 @@ export function useLiquidity(signer: ethers.JsonRpcSigner | null, address: strin
       await refreshPools();
 
       return receipt.hash;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { message?: string };
       console.error('Error adding liquidity:', error);
-      throw new Error(`Failed to add liquidity: ${error.message}`);
+      throw new Error(`Failed to add liquidity: ${err.message || 'Unknown error'}`);
     }
   }, [signer, address, refreshPools]);
 
@@ -220,9 +221,10 @@ export function useLiquidity(signer: ethers.JsonRpcSigner | null, address: strin
       await refreshPools();
 
       return receipt.hash;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { message?: string };
       console.error('Error removing liquidity:', error);
-      throw new Error(`Failed to remove liquidity: ${error.message}`);
+      throw new Error(`Failed to remove liquidity: ${err.message || 'Unknown error'}`);
     }
   }, [signer, address, refreshPools]);
 

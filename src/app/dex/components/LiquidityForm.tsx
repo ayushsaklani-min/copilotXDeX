@@ -124,8 +124,9 @@ export default function LiquidityForm({
         setAmountA('');
         setAmountB('');
       }
-    } catch (error: any) {
-      onStatusChange({ message: error.message, type: 'error' });
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      onStatusChange({ message: err.message || 'Unknown error occurred', type: 'error' });
     } finally {
       setIsAdding(false);
     }
@@ -162,8 +163,9 @@ export default function LiquidityForm({
         // Reset form
         setLpAmount('');
       }
-    } catch (error: any) {
-      onStatusChange({ message: error.message, type: 'error' });
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      onStatusChange({ message: err.message || 'Unknown error occurred', type: 'error' });
     } finally {
       setIsRemoving(false);
     }

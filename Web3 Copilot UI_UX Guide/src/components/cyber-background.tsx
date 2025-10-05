@@ -19,7 +19,7 @@ interface Polygon {
 export function CyberBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const polygonsRef = useRef<Polygon[]>([]);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const canvas = canvasRef.current;

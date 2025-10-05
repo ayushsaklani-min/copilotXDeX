@@ -21,7 +21,7 @@ export default function SwapTest() {
 
   const connectWallet = async () => {
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      const provider = new ethers.BrowserProvider((window as any).ethereum as ethers.Eip1193Provider);
       await provider.send("eth_requestAccounts", []);
       
       const signer = await provider.getSigner();
@@ -91,8 +91,9 @@ export default function SwapTest() {
       const receipt = await swapTx.wait();
       
       setStatus(`Swap successful! TX: ${receipt.hash.slice(0, 10)}...`);
-    } catch (error: any) {
-      setStatus(`Swap failed: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      setStatus(`Swap failed: ${err.message || 'Unknown error'}`);
     }
   };
 
@@ -100,7 +101,7 @@ export default function SwapTest() {
     if (isConnected && fromAmount) {
       calculateOutput();
     }
-  }, [isConnected, fromAmount]);
+  }, [isConnected, fromAmount, calculateOutput]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center">

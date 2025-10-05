@@ -51,7 +51,7 @@ export default function DexPage() {
   const [isRemoving, setIsRemoving] = useState(false);
 
   // Pool data
-  const [pools, setPools] = useState<any[]>([]);
+  const [pools, setPools] = useState<Array<{ name: string; token0: string; token1: string; lpToken: string; reserve0: string; reserve1: string; tvl: number; pairKey: string; totalSupply: string }>>([]);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [userLpBalances, setUserLpBalances] = useState<{ [key: string]: string }>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -71,7 +71,7 @@ export default function DexPage() {
   // Check wallet connection
   useEffect(() => {
     const checkConnection = async () => {
-      if (typeof window !== 'undefined' && window.ethereum) {
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
         try {
           const provider = new ethers.BrowserProvider(getExternalProvider());
           const accounts = await provider.listAccounts();
@@ -148,7 +148,7 @@ export default function DexPage() {
         },
       ];
 
-      const poolsData = [] as any[];
+      const poolsData: Array<{ name: string; token0: string; token1: string; lpToken: string; reserve0: string; reserve1: string; tvl: number; pairKey: string; totalSupply: string }> = [];
       const lpBalances: { [key: string]: string } = {};
       
       for (const poolConfig of poolConfigs) {
@@ -179,6 +179,8 @@ export default function DexPage() {
             reserve0: ethers.formatEther(pair[3]),
             reserve1: ethers.formatEther(pair[4]),
             tvl,
+            pairKey: tikToePairKey,
+            totalSupply: ethers.formatEther(pair[5]),
           });
           
           lpBalances[poolConfig.name] = userLpBalance;
@@ -363,9 +365,10 @@ export default function DexPage() {
       setFromAmount('');
       setToAmount('');
       setIsApproved(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { message?: string };
       console.error('Error executing swap:', error);
-      setStatus({ message: `Swap failed: ${error.message}`, type: 'error' });
+      setStatus({ message: `Swap failed: ${err.message || 'Unknown error'}`, type: 'error' });
     } finally {
       setIsSwapping(false);
     }
@@ -422,8 +425,8 @@ export default function DexPage() {
       }
 
       // Get current gas price and increase it
-      const feeData = await signer.provider!.getFeeData();
-      const gasPrice = feeData.gasPrice ? feeData.gasPrice * 2n : ethers.parseUnits("30", "gwei");
+      const feeData = await signer?.provider?.getFeeData();
+      const gasPrice = feeData?.gasPrice ? feeData.gasPrice * BigInt(2) : ethers.parseUnits("30", "gwei");
 
       // Check allowances first
       const allowanceA = await tokenAContract.allowance(address, DEX_ADDRESS);
@@ -485,18 +488,19 @@ export default function DexPage() {
       // Reset form
       setAmountA('');
       setAmountB('');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { message?: string };
       console.error('Add liquidity error:', error);
       
       // Provide more specific error messages
-      if (error.message.includes('insufficient funds')) {
+      if (err.message?.includes('insufficient funds')) {
         setStatus({ message: 'Insufficient funds for gas fees', type: 'error' });
-      } else if (error.message.includes('user rejected')) {
+      } else if (err.message?.includes('user rejected')) {
         setStatus({ message: 'Transaction rejected by user', type: 'error' });
-      } else if (error.message.includes('execution reverted')) {
+      } else if (err.message?.includes('execution reverted')) {
         setStatus({ message: 'Transaction failed - check token balances and allowances', type: 'error' });
       } else {
-        setStatus({ message: `Add liquidity failed: ${error.message}`, type: 'error' });
+        setStatus({ message: `Add liquidity failed: ${err.message || 'Unknown error'}`, type: 'error' });
       }
     } finally {
       setIsAdding(false);
@@ -508,14 +512,14 @@ export default function DexPage() {
     if (isConnected && fromAmount) {
       calculateOutput();
     }
-  }, [fromAmount, fromToken, toToken, isConnected]);
+  }, [fromAmount, fromToken, toToken, isConnected, calculateOutput]);
 
   // Check approval when amount changes
   useEffect(() => {
     if (isConnected && fromAmount) {
       checkApproval();
     }
-  }, [fromAmount, fromToken, isConnected]);
+  }, [fromAmount, fromToken, isConnected, checkApproval]);
 
   const tabs = [
     { id: 'swap', label: 'Swap', icon: '🔄' },
@@ -729,7 +733,7 @@ export default function DexPage() {
                       try {
                         await Promise.all([loadBalances(), loadPools()]);
                         setStatus({ message: 'Data refreshed', type: 'success' });
-                      } catch (e) {
+                      } catch (e: unknown) {
                         setStatus({ message: 'Refresh failed', type: 'error' });
                       } finally {
                         setIsRefreshing(false);
@@ -902,7 +906,7 @@ export default function DexPage() {
                   address={address}
                   pools={pools}
                   userLpBalances={userLpBalances}
-                  userBalances={balances}
+                  userBalances={Object.fromEntries(Object.entries(balances).map(([key, value]) => [key, value.toString()]))}
                 />
               </div>
             )}

@@ -14,7 +14,7 @@ import {
 } from './ui/select';
 import { MOCK_TOKENS } from '../lib/mock-data';
 import { useWallet } from '../lib/wallet-context';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { Alert, AlertDescription } from './ui/alert';
 import { Info } from 'lucide-react';
 

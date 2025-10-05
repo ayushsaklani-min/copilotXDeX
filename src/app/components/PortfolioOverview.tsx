@@ -32,7 +32,7 @@ const TOKEN_ICONS = {
   POL: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M8 12l2-2 2 2-2 2-2-2zm4-4l2-2 2 2-2 2-2-2z" fill="white"/></svg>`
 };
 
-export default function PortfolioOverview({ balances, isLoading, onRefresh, prices, nativeSymbol, tokens }: PortfolioOverviewProps) {
+export default function PortfolioOverview({ balances, isLoading, onRefresh, prices, nativeSymbol }: PortfolioOverviewProps) {
   // Display native first, then all discovered balance symbols
   const discovered = Object.keys(balances).filter(s => s !== nativeSymbol);
   const tokenDisplayOrder = [nativeSymbol, ...discovered];

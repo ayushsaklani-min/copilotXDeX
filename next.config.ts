@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_ALCHEMY_API_KEY: "9BF8nSZfP4AubPhp5y8AX",
   },
+  outputFileTracingRoot: __dirname,
 };
 
 export default nextConfig;

@@ -42,7 +42,7 @@ export const usePrices = (): UsePricesReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [mockPrices]);
 
   // Auto-refresh prices
   useEffect(() => {

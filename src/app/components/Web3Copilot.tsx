@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import PortfolioOverview from './PortfolioOverview';
 import AIAssistant from './AIAssistant';
@@ -115,13 +115,13 @@ export default function Web3Copilot() {
       }
     };
 
-    if (typeof window !== 'undefined' && window.ethereum) {
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', handleChainChanged);
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
+      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
+      (window as any).ethereum.on('chainChanged', handleChainChanged);
 
       return () => {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
+        (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        (window as any).ethereum.removeListener('chainChanged', handleChainChanged);
       };
     }
   }, [signer]);
@@ -143,8 +143,9 @@ export default function Web3Copilot() {
       setIsCorrectNetwork(true);
       
       await fetchBalances();
-    } catch (error: any) {
-      if (error.code === 4902) {
+    } catch (error: unknown) {
+      const err = error as { code?: number; message?: string };
+      if (err.code === 4902) {
         // Network not added, try to add it
         try {
           await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
@@ -220,8 +221,9 @@ export default function Web3Copilot() {
             
             setIsCorrectNetwork(true);
             await fetchBalances();
-          } catch (switchError: any) {
-            if (switchError.code === 4902) {
+          } catch (switchError: unknown) {
+            const switchErr = switchError as { code?: number; message?: string };
+            if (switchErr.code === 4902) {
               // Network not added, try to add it
             try {
               await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
@@ -315,7 +317,7 @@ export default function Web3Copilot() {
 
         for (const tokenBalance of data.result.tokenBalances) {
           if (tokenBalance.tokenBalance !== '0x0') {
-            const metadata = tokenMetadata.find((meta: any) => 
+            const metadata = tokenMetadata.find((meta: { contractAddress?: string }) => 
               meta.contractAddress?.toLowerCase() === tokenBalance.contractAddress?.toLowerCase()
             );
 
@@ -521,7 +523,7 @@ export default function Web3Copilot() {
                     return acc;
                   }, {} as Record<string, number>)}
                   nativeSymbol={NETWORK.nativeSymbol}
-                  tokens={NETWORK.tokens}
+                  tokens={{}}
             />
 
             <AIAssistant

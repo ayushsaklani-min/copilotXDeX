@@ -15,8 +15,8 @@ interface ContractConfig {
     lpToken: string;
   }>;
   abis: {
-    TikTakDex: any;
-    TikTakLP: any;
+    TikTakDex: string[];
+    TikTakLP: string[];
   };
 }
 
@@ -44,8 +44,7 @@ interface UseDexReturn {
 }
 
 export const useDex = (
-  signer: ethers.JsonRpcSigner | null,
-  address: string | null
+  signer: ethers.JsonRpcSigner | null
 ): UseDexReturn => {
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [totalTVL, setTotalTVL] = useState(0);

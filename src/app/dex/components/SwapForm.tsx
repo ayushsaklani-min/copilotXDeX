@@ -9,7 +9,7 @@ interface SwapFormProps {
   isConnected: boolean;
   isCorrectNetwork: boolean;
   onStatusChange: (status: { message: string; type: string }) => void;
-  dex: any;
+  dex: { getAmountOut: (amount: number, tokenIn: string, tokenOut: string) => Promise<number>; swapTokens: (tokenIn: string, tokenOut: string, amount: number, to: string) => Promise<string> };
   prices: Record<string, number>;
 }
 
@@ -28,7 +28,6 @@ export default function SwapForm({
   isCorrectNetwork,
   onStatusChange,
   dex,
-  prices,
 }: SwapFormProps) {
   const [fromToken, setFromToken] = useState('TIK');
   const [toToken, setToToken] = useState('TAK');
@@ -53,8 +52,8 @@ export default function SwapForm({
 
         const balancesData: Record<string, number> = {};
         
-        for (const [symbol, address] of Object.entries(TOKENS)) {
-          const contract = new ethers.Contract(address, ERC20_ABI, signer);
+        for (const [symbol, tokenAddress] of Object.entries(TOKENS)) {
+          const contract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
           const balance = await contract.balanceOf(address);
           balancesData[symbol] = parseFloat(ethers.formatEther(balance));
         }
@@ -95,7 +94,7 @@ export default function SwapForm({
     };
 
     calculateOutput();
-  }, [fromAmount, fromToken, toToken, dex]);
+  }, [fromAmount, fromToken, toToken]);
 
   // Check approval status
   useEffect(() => {
@@ -122,7 +121,7 @@ export default function SwapForm({
     };
 
     checkApproval();
-  }, [signer, address, fromAmount, fromToken]);
+  }, [signer, address, fromAmount, fromToken, onStatusChange]);
 
   const handleApprove = async () => {
     if (!signer || !address) return;
@@ -194,6 +193,9 @@ export default function SwapForm({
     setFromAmount(toAmount);
     setToAmount(tempAmount);
   };
+
+  // Remove unused variable
+  const _ = null;
 
   if (!isConnected) {
     return (

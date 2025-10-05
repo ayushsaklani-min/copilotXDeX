@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useTikTakToeBalances } from '../../hooks/useTikTakToeBalances';
 import { useTikTakToeSwap } from '../../hooks/useTikTakToeSwap';
@@ -113,7 +113,7 @@ export default function TikTakToeSwap({
           });
           setIsCorrectNetwork(true);
           setStatus({ message: 'Added and switched to Polygon Amoy network!', type: 'success' });
-        } catch (addError) {
+        } catch (addError: unknown) {
           setStatus({ message: 'Failed to add Polygon Amoy network to MetaMask', type: 'error' });
         }
       } else {
@@ -279,7 +279,7 @@ export default function TikTakToeSwap({
                   <h4 className="text-lg font-semibold text-cyan-200 mb-3">Contract Reserves</h4>
                   <div className="text-sm text-gray-300 space-y-2">
                     <p>• The swap contract needs to have reserves of both tokens to enable swaps</p>
-                    <p>• If reserves are empty, use the "Sync Reserves" button to update them</p>
+                    <p>• If reserves are empty, use the &quot;Sync Reserves&quot; button to update them</p>
                     <p>• Make sure the contract has been funded with tokens</p>
                   </div>
                 </div>
