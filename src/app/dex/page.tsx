@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { ethers } from 'ethers';
 import DexAIAssistant from './components/DexAIAssistant';
@@ -91,7 +91,7 @@ export default function DexPage() {
     };
 
     checkConnection();
-  }, []);
+  }, [POLYGON_AMOY_CONFIG.chainId]);
 
   // Load token balances
   const loadBalances = async () => {
@@ -118,7 +118,7 @@ export default function DexPage() {
 
   useEffect(() => {
     loadBalances();
-  }, [signer, address]);
+  }, [signer, address, loadBalances]);
 
   // Load pool data
   const loadPools = async () => {
@@ -196,7 +196,7 @@ export default function DexPage() {
 
   useEffect(() => {
     loadPools();
-  }, [signer]);
+  }, [signer, loadPools]);
 
   // Connect wallet
   const connectWallet = async () => {
@@ -267,7 +267,7 @@ export default function DexPage() {
   };
 
   // Calculate output amount for swap
-  const calculateOutput = async () => {
+  const calculateOutput = useCallback(async () => {
     if (!signer || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken === toToken) {
       setToAmount('');
       return;
@@ -288,10 +288,10 @@ export default function DexPage() {
       console.error('Error calculating output:', error);
       setToAmount('');
     }
-  };
+  }, [signer, fromAmount, fromToken, toToken]);
 
   // Check approval status
-  const checkApproval = async () => {
+  const checkApproval = useCallback(async () => {
     if (!signer || !address || !fromAmount || parseFloat(fromAmount) <= 0) {
       setIsApproved(false);
       return;
@@ -308,10 +308,10 @@ export default function DexPage() {
       console.error('Error checking approval:', error);
       setIsApproved(false);
     }
-  };
+  }, [signer, address, fromAmount, fromToken]);
 
   // Approve tokens
-  const handleApprove = async () => {
+  const handleApprove = useCallback(async () => {
     if (!signer || !address) return;
 
     try {
@@ -328,7 +328,7 @@ export default function DexPage() {
       console.error('Error approving token:', error);
       setStatus({ message: 'Failed to approve token', type: 'error' });
     }
-  };
+  }, [signer, address, fromAmount, fromToken, setStatus]);
 
   // Execute swap
   const handleSwap = async () => {

@@ -146,7 +146,7 @@ export default function ConnectBackground() {
     });
     setNodes(createdNodes);
     setLinks(createdLinks);
-  }, [counts]);
+  }, [counts, icons.length]);
 
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: 'radial-gradient(1200px 800px at 50% 60%, #0b1020 0%, #070b17 40%, #03060e 70%, #01030a 100%)' }}>

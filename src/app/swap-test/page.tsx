@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 
 const TOKENS = {
@@ -36,7 +36,7 @@ export default function SwapTest() {
     }
   };
 
-  const calculateOutput = async () => {
+  const calculateOutput = useCallback(async () => {
     if (!signer || !fromAmount) return;
 
     try {
@@ -54,7 +54,7 @@ export default function SwapTest() {
     } catch {
       setStatus('Error calculating output');
     }
-  };
+  }, [signer, fromAmount]);
 
   const executeSwap = async () => {
     if (!signer || !fromAmount) return;

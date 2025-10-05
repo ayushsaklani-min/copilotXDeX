@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 interface UsePricesReturn {
   prices: Record<string, number>;
@@ -13,14 +13,14 @@ export const usePrices = (): UsePricesReturn => {
   const [error, setError] = useState<string | null>(null);
 
   // Mock price data (in real implementation, you'd fetch from price oracles)
-  const mockPrices: Record<string, number> = {
+  const mockPrices: Record<string, number> = useMemo(() => ({
     'TIK-TAK': 1.25,
     'TIK-TOE': 0.85,
     'TAK-TOE': 0.68,
     'TIK': 1.0,
     'TAK': 0.8,
     'TOE': 1.18,
-  };
+  }), []);
 
   const refreshPrices = useCallback(async () => {
     setIsLoading(true);

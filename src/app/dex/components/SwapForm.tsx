@@ -94,7 +94,7 @@ export default function SwapForm({
     };
 
     calculateOutput();
-  }, [fromAmount, fromToken, toToken]);
+  }, [fromAmount, fromToken, toToken, dex]);
 
   // Check approval status
   useEffect(() => {

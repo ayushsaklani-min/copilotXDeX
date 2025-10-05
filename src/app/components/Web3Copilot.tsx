@@ -116,7 +116,7 @@ export default function Web3Copilot() {
     };
 
     if (typeof window !== 'undefined' && (window as any).ethereum) {
-      const ethereum = (window as any).ethereum;
+      const ethereum = (window as any).ethereum as { on: (event: string, callback: (...args: any[]) => void) => void; removeListener: (event: string, callback: (...args: any[]) => void) => void };
       ethereum.on('accountsChanged', handleAccountsChanged);
       ethereum.on('chainChanged', handleChainChanged);
 

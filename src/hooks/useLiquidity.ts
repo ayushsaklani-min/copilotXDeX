@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ethers } from 'ethers';
 
 interface LiquidityPool {
@@ -66,7 +66,7 @@ export function useLiquidity(signer: ethers.JsonRpcSigner | null, address: strin
   const [error, setError] = useState<string | null>(null);
 
   // Pool configurations
-  const poolConfigs = [
+  const poolConfigs = useMemo(() => [
     {
       name: 'TIK-TOE',
       token0: TOKENS.TIK,
@@ -79,7 +79,7 @@ export function useLiquidity(signer: ethers.JsonRpcSigner | null, address: strin
       token1: TOKENS.TOE,
       lpToken: '0x7287fe333C0432c1c48602A4838e5d96db65ED49',
     },
-  ];
+  ], []);
 
   // Get LP token balance for a specific pool
   const getLpBalance = useCallback(async (tokenA: string, tokenB: string): Promise<string> => {

@@ -186,11 +186,10 @@ export default function TokenSwap({
   };
 
   // Recalculate quote when inputs change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const timeoutId = setTimeout(getQuote, 500);
     return () => clearTimeout(timeoutId);
-  }, [fromAmount, fromToken, toToken, address]);
+  }, [fromAmount, fromToken, toToken, address, getQuote]);
 
   // Create unsigned transaction for simulation
   const createUnsignedTransaction = async () => {
@@ -270,7 +269,7 @@ export default function TokenSwap({
         const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
         const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
         const direct = [addr(fromToken), addr(toToken)];
-        const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
+        // const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
         const path = direct; // Use direct path for simulation
         
         const amountOutMin = ethers.parseUnits(

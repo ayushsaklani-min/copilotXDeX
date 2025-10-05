@@ -204,13 +204,13 @@ export default function PoolAnalytics({
 
   useEffect(() => {
     generateMockData();
-  }, [timeframe]);
+  }, [timeframe, generateMockData]);
 
   // Auto-refresh charts periodically
   useEffect(() => {
     const id = setInterval(generateMockData, 15000);
     return () => clearInterval(id);
-  }, [timeframe]);
+  }, [timeframe, generateMockData]);
 
   const totalVolume = volumeData.reduce((sum, item) => sum + item.volume, 0);
   const totalTrades = volumeData.reduce((sum, item) => sum + item.trades, 0);

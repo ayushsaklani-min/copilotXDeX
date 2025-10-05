@@ -73,7 +73,7 @@ export default function DexAIAssistant({ signer, address, pools, userLpBalances,
     };
 
     fetchUserBalances();
-  }, [signer, address]);
+  }, [signer, address, propUserBalances]);
 
   // Use prop balances if available and local balances are empty
   useEffect(() => {
