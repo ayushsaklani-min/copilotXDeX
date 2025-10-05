@@ -128,11 +128,9 @@ export default function TokenSwap({
       );
 
       const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
-      const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
       const direct = [addr(fromToken), addr(toToken)];
-      const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
 
-      const candidatePaths = [direct, viaWrapped].filter(Boolean) as string[][];
+      const candidatePaths = [direct].filter(Boolean) as string[][];
 
       let bestOut: string | null = null;
       for (const p of candidatePaths) {
@@ -398,10 +396,8 @@ export default function TokenSwap({
           await tx.wait();
         } else {
           const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
-          const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
           const direct = [addr(fromToken), addr(toToken)];
-          const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
-          const candidatePaths = [direct, viaWrapped].filter(Boolean) as string[][];
+          const candidatePaths = [direct].filter(Boolean) as string[][];
 
           let executed = false;
           let lastError: unknown = null;
