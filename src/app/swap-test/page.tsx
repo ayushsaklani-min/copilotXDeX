@@ -21,7 +21,8 @@ export default function SwapTest() {
 
   const connectWallet = async () => {
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum as ethers.Eip1193Provider);
+      const ethereum = (window as any).ethereum as ethers.Eip1193Provider;
+      const provider = new ethers.BrowserProvider(ethereum);
       await provider.send("eth_requestAccounts", []);
       
       const signer = await provider.getSigner();
