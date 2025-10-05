@@ -23,6 +23,9 @@ export default function PoolAnalytics({
 
   // Small SVG chart components (no external deps)
   const SimpleBarChart = ({ data, height = 300 }: { data: { volume: number; trades?: number; time: string }[]; height?: number }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [hover, setHover] = useState<{ index: number; xPct: number } | null>(null);
+    
     if (!data || data.length === 0) {
       return (
         <div className="w-full h-[300px] flex items-center justify-center text-gray-400">No data</div>
@@ -30,8 +33,6 @@ export default function PoolAnalytics({
     }
     const maxVal = Math.max(1, ...data.map(d => d.volume));
     const barWidth = 100 / data.length;
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [hover, setHover] = useState<{ index: number; xPct: number } | null>(null);
 
     const onMove = (e: React.MouseEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
@@ -99,6 +100,9 @@ export default function PoolAnalytics({
   };
 
   const SimpleLineChart = ({ data, height = 300 }: { data: { tvl: number; time: string }[]; height?: number }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [hover, setHover] = useState<{ index: number; xPct: number; yPct: number } | null>(null);
+    
     if (!data || data.length === 0) {
       return (
         <div className="w-full h-[300px] flex items-center justify-center text-gray-400">No data</div>
@@ -107,8 +111,6 @@ export default function PoolAnalytics({
     const maxVal = Math.max(1, ...data.map(d => d.tvl));
     const minVal = Math.min(...data.map(d => d.tvl));
     const range = Math.max(1, maxVal - minVal);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [hover, setHover] = useState<{ index: number; xPct: number; yPct: number } | null>(null);
     const getXY = (idx: number) => {
       const safeIdx = Math.min(data.length - 1, Math.max(0, idx));
       const x = (safeIdx / Math.max(1, data.length - 1)) * 100;

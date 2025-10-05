@@ -113,7 +113,7 @@ export default function TikTakToeSwap({
           });
           setIsCorrectNetwork(true);
           setStatus({ message: 'Added and switched to Polygon Amoy network!', type: 'success' });
-        } catch (addError: unknown) {
+        } catch {
           setStatus({ message: 'Failed to add Polygon Amoy network to MetaMask', type: 'error' });
         }
       } else {

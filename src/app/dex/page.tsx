@@ -47,8 +47,6 @@ export default function DexPage() {
   const [amountA, setAmountA] = useState('');
   const [amountB, setAmountB] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [lpAmount, setLpAmount] = useState('');
-  const [isRemoving, setIsRemoving] = useState(false);
 
   // Pool data
   const [pools, setPools] = useState<Array<{ name: string; token0: string; token1: string; lpToken: string; reserve0: string; reserve1: string; tvl: number; pairKey: string; totalSupply: string }>>([]);
@@ -259,7 +257,7 @@ export default function DexPage() {
           });
           setIsCorrectNetwork(true);
           setStatus({ message: 'Added and switched to Polygon Amoy network!', type: 'success' });
-        } catch (addError) {
+        } catch {
           setStatus({ message: 'Failed to add Polygon Amoy network to MetaMask', type: 'error' });
         }
       } else {
@@ -733,7 +731,7 @@ export default function DexPage() {
                       try {
                         await Promise.all([loadBalances(), loadPools()]);
                         setStatus({ message: 'Data refreshed', type: 'success' });
-                      } catch (e: unknown) {
+                      } catch {
                         setStatus({ message: 'Refresh failed', type: 'error' });
                       } finally {
                         setIsRefreshing(false);

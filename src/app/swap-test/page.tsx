@@ -31,7 +31,7 @@ export default function SwapTest() {
       setAddress(address);
       setIsConnected(true);
       setStatus('Wallet connected!');
-    } catch (error) {
+    } catch {
       setStatus('Failed to connect wallet');
     }
   };
@@ -51,7 +51,7 @@ export default function SwapTest() {
       
       setToAmount(amountOut);
       setStatus(`1 TIK = ${amountOut} TOE`);
-    } catch (error) {
+    } catch {
       setStatus('Error calculating output');
     }
   };

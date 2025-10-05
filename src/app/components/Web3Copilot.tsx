@@ -116,12 +116,13 @@ export default function Web3Copilot() {
     };
 
     if (typeof window !== 'undefined' && (window as any).ethereum) {
-      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
-      (window as any).ethereum.on('chainChanged', handleChainChanged);
+      const ethereum = (window as any).ethereum;
+      ethereum.on('accountsChanged', handleAccountsChanged);
+      ethereum.on('chainChanged', handleChainChanged);
 
       return () => {
-        (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        (window as any).ethereum.removeListener('chainChanged', handleChainChanged);
+        ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        ethereum.removeListener('chainChanged', handleChainChanged);
       };
     }
   }, [signer]);
@@ -243,7 +244,7 @@ export default function Web3Copilot() {
                 
                 setIsCorrectNetwork(true);
                 await fetchBalances();
-              } catch (addError) {
+              } catch {
                 setError('Please add Polygon Amoy network to MetaMask');
               }
             } else {
@@ -327,7 +328,7 @@ export default function Web3Copilot() {
               
               // Find the token in our configuration
               const tokenConfig = Object.entries(NETWORK.tokens).find(
-                ([_, config]) => config.address.toLowerCase() === tokenBalance.contractAddress?.toLowerCase()
+                ([, config]) => config.address.toLowerCase() === tokenBalance.contractAddress?.toLowerCase()
               );
 
               if (tokenConfig) {

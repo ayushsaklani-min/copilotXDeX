@@ -194,8 +194,6 @@ export default function SwapForm({
     setToAmount(tempAmount);
   };
 
-  // Remove unused variable
-  const _ = null;
 
   if (!isConnected) {
     return (

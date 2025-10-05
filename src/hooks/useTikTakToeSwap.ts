@@ -4,8 +4,7 @@ import {
   TIK_TAK_TOE_CONTRACTS, 
   TIK_TAK_TOE_TOKENS, 
   ERC20_ABI, 
-  SWAP_CONTRACT_ABI,
-  POLYGON_AMOY_CONFIG 
+  SWAP_CONTRACT_ABI
 } from '../constants/tikTakToeContracts';
 
 interface SwapParams {
@@ -37,7 +36,7 @@ export const useTikTakToeSwap = (
 ): UseSwapReturn => {
   const [isApproving, setIsApproving] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
-  const [estimatedOutput, setEstimatedOutput] = useState<string | null>(null);
+  const [estimatedOutput] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Check if user has sufficient allowance for the swap
