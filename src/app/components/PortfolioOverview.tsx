@@ -15,10 +15,9 @@ interface Prices {
 }
 
 interface PortfolioOverviewProps {
-  isOpen: boolean;
-  onToggle: () => void;
   balances: Balances;
-  isBalancesLoading: boolean;
+  isLoading: boolean;
+  onRefresh: () => void;
   prices: Prices;
   nativeSymbol: string;
   tokens: { [key: string]: TokenInfo };
@@ -33,55 +32,54 @@ const TOKEN_ICONS = {
   POL: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path d="M8 12l2-2 2 2-2 2-2-2zm4-4l2-2 2 2-2 2-2-2z" fill="white"/></svg>`
 };
 
-export default function PortfolioOverview({ isOpen, onToggle, balances, isBalancesLoading, prices, nativeSymbol, tokens }: PortfolioOverviewProps) {
+export default function PortfolioOverview({ balances, isLoading, onRefresh, prices, nativeSymbol, tokens }: PortfolioOverviewProps) {
   // Display native first, then all discovered balance symbols
   const discovered = Object.keys(balances).filter(s => s !== nativeSymbol);
   const tokenDisplayOrder = [nativeSymbol, ...discovered];
   const uniqueOrder = Array.from(new Set(tokenDisplayOrder));
+  
   return (
-    <div className="rounded-lg mb-5 neon-card">
-      <div 
-        className="p-4 cursor-pointer flex justify-between items-center text-xl font-bold"
-        onClick={onToggle}
-      >
-        <span>Wallet Overview</span>
-        <span className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
-          ▼
-        </span>
+    <div className="neon-card p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-white">Portfolio Overview</h2>
+        <button
+          onClick={onRefresh}
+          disabled={isLoading}
+          className="px-3 py-1 bg-cyan-500/20 text-cyan-300 rounded-lg hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+        >
+          {isLoading ? 'Refreshing...' : 'Refresh'}
+        </button>
       </div>
-      <div className={`overflow-hidden will-change-[max-height] transition-[max-height] ease-in-out duration-300 ${isOpen ? 'max-h-[700px]' : 'max-h-0'}`}>
-        <div className="px-4 pb-4">
-          {isBalancesLoading ? (
-            <div className="flex justify-center items-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 auto-rows-fr">
-              {uniqueOrder.map(symbol => (
-                <div key={symbol} className="rounded-lg p-4 h-full flex flex-col justify-between neon-control">
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-8 h-8" 
-                      dangerouslySetInnerHTML={{ __html: (TOKEN_ICONS as Record<string, string>)[symbol] || TOKEN_ICONS['MATIC'] }} 
-                    />
-                    <span className="text-xl font-bold text-white">{symbol}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-white">
-                      {balances[symbol] || '0.0000'}
-                    </div>
-                    {prices[symbol] && (
-                      <div className="text-sm text-gray-300">
-                        ${(parseFloat(balances[symbol] || '0') * prices[symbol]).toFixed(2)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      
+      {isLoading ? (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 auto-rows-fr">
+          {uniqueOrder.map(symbol => (
+            <div key={symbol} className="rounded-lg p-4 h-full flex flex-col justify-between neon-control">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-8 h-8" 
+                  dangerouslySetInnerHTML={{ __html: (TOKEN_ICONS as Record<string, string>)[symbol] || TOKEN_ICONS['MATIC'] }} 
+                />
+                <span className="text-xl font-bold text-white">{symbol}</span>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-white">
+                  {balances[symbol] || '0.0000'}
+                </div>
+                {prices[symbol] && prices[symbol] > 0 && (
+                  <div className="text-sm text-gray-300">
+                    ${(parseFloat(balances[symbol] || '0') * prices[symbol]).toFixed(2)}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

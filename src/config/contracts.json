@@ -1,0 +1,42 @@
+{
+  "network": "polygon-amoy",
+  "chainId": 80002,
+  "dexAddress": "0x3Db5A1C4bE6C21ceCaf3E74611Bd55F41651f0Ba",
+  "tokens": {
+    "TIK": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
+    "TAK": "0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3",
+    "TOE": "0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc"
+  },
+  "pairs": {
+    "TIK-TAK": "0x0000000000000000000000000000000000000000",
+    "TIK-TOE": "0x9999e190b6Ab99B0AC123b880b0A51171e74BfFA",
+    "TAK-TOE": "0x7287fe333C0432c1c48602A4838e5d96db65ED49"
+  },
+  "abis": {
+    "TikTakDex": [
+      "function createPair(address token0, address token1) external returns (address)",
+      "function addSupportedTokens(address[] memory tokens) external",
+      "function pairs(bytes32) external view returns (address, address, address, uint256, uint256, uint256, uint256)",
+      "function addLiquidity(address token0, address token1, uint256 amount0, uint256 amount1, address to) external returns (uint256)",
+      "function removeLiquidity(address token0, address token1, uint256 lpAmount, address to) external returns (uint256, uint256)",
+      "function swapExactTokensForTokens(address tokenIn, address tokenOut, uint256 amountIn, address to) external returns (uint256)",
+      "function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)",
+      "function getAmountIn(uint256 amountOut, uint256 reserveIn, uint256 reserveOut) external pure returns (uint256)"
+    ],
+    "TikTakLP": [
+      "function name() external view returns (string)",
+      "function symbol() external view returns (string)",
+      "function decimals() external view returns (uint8)",
+      "function totalSupply() external view returns (uint256)",
+      "function balanceOf(address) external view returns (uint256)",
+      "function transfer(address to, uint256 amount) external returns (bool)",
+      "function approve(address spender, uint256 amount) external returns (bool)",
+      "function allowance(address owner, address spender) external view returns (uint256)"
+    ]
+  },
+  "deployment": {
+    "timestamp": "2025-10-04T23:11:36.886Z",
+    "blockNumber": 27280938,
+    "transactionHash": "0xc7e7a2efebd20532a67c6b8a1ac9afc27f1b4e136c1a1848f6f06825fe911d93"
+  }
+}

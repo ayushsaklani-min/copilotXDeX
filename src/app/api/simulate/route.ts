@@ -45,11 +45,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Map chain IDs to Tenderly network names
+    // Map chain IDs to Tenderly network names (Polygon Amoy only)
     const chainIdToNetwork: Record<number, string> = {
-      1: 'mainnet',
-      11155111: 'sepolia',
-      137: 'polygon',
       80002: 'polygon-amoy'
     };
 

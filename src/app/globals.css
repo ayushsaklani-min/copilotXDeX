@@ -4,34 +4,49 @@
 @tailwind utilities;
 
 :root {
+  /* Core surfaces */
   --background: #0a091e; /* deep space */
+  --surface: #0f1430; /* elevated background */
+  --card: rgba(22,28,51,0.6);
   --foreground: rgba(22,28,51,0.6); /* glass dark */
-  --text: #e0e0e0;
+
+  /* Text */
+  --text: #e7eaf3;
+  --text-muted: rgba(231, 234, 243, 0.7);
+
+  /* Brand & accents */
+  --primary: #00FFFF; /* neon cyan */
+  --primary-foreground: #061526;
+  --accent: #F000FF; /* neon magenta */
+  --accent-foreground: #0f0820;
+
+  /* Feedback */
+  --success: #2bd576;
+  --warning: #ffd166;
+  --danger: #ff6b6b;
+  --ring: rgba(0,255,255,0.45);
+
+  /* Misc */
+  --border: rgba(0,255,255,0.28);
   --black: #111111;
-  --yellow: #FAFF00;
-  --cyan: #00FFFF; /* neon cyan */
-  --magenta: #F000FF; /* neon magenta */
-  --green: #89F1A7;
-  --red: #FF9D9D;
-  --blue: #A3D4FF;
 }
 
 /* Custom theme variables */
 
 body {
   font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, 'Space Mono', sans-serif;
-  background-color: #0a091e;
+  background-color: var(--background);
   background-image: radial-gradient(800px 500px at 20% 10%, rgba(0,255,255,0.06), transparent 60%),
                     radial-gradient(900px 700px at 80% 0%, rgba(240,0,255,0.05), transparent 65%),
                     linear-gradient(180deg, #0a091e 0%, #1a143b 100%);
   background-size: cover;
   color: var(--text);
   margin: 0;
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
+}
+
+/* App shell */
+html, body, #__next {
+  height: 100%;
 }
 
 /* Aurora utilities */
@@ -43,16 +58,16 @@ body {
 }
 
 .neon-card {
-  background-color: rgba(22,28,51,0.6);
+  background-color: var(--card);
   border-radius: 12px;
-  border: 1px solid rgba(0,255,255,0.35);
+  border: 1px solid var(--border);
   box-shadow: 0 0 20px rgba(0,255,255,0.25), 0 0 40px rgba(240,0,255,0.12);
 }
 
 .neon-control {
   background-color: rgba(16,20,40,0.8);
   color: #ffffff;
-  border: 1px solid rgba(0,255,255,0.25);
+  border: 1px solid var(--border);
   border-radius: 10px;
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -72,6 +87,19 @@ body {
 .connect-container {
   width: 100%;
   max-width: 560px;
+}
+
+/* Focus rings */
+:where(button, a, input, select, textarea, [role="button"]) {
+  outline: none;
+}
+:where(button, a, input, select, textarea, [role="button"]):focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 @keyframes floatUp {

@@ -92,13 +92,8 @@ export function isWrapUnwrapOperation(fromToken: string, toToken: string, native
 }
 
 /**
- * Get the appropriate wrapped token address for a network
+ * Get the wrapped token address for Polygon Amoy
  */
-export function getWrappedTokenAddress(networkKey: string): string {
-  const addresses = {
-    amoy: '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889', // WMATIC on Amoy
-    sepolia: '0xfFf9976782D46CC05630D1f6eBAb18B2324d6B14' // WETH on Sepolia
-  };
-  
-  return addresses[networkKey as keyof typeof addresses] || '';
+export function getWrappedTokenAddress(): string {
+  return '0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889'; // WMATIC on Amoy
 }
