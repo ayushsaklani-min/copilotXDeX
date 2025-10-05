@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface PoolAnalyticsProps {
   signer: unknown;
@@ -178,7 +178,7 @@ export default function PoolAnalytics({
   };
 
   // Mock data generation (in real implementation, you'd fetch from subgraph or events)
-  const generateMockData = () => {
+  const generateMockData = useCallback(() => {
     const dataPoints = timeframe === '24h' ? 24 : timeframe === '7d' ? 7 : 30;
     const interval = timeframe === '24h' ? 1 : timeframe === '7d' ? 1 : 1;
     const nextVolumeData: Array<{ time: string; volume: number; trades: number }> = [];
@@ -200,7 +200,7 @@ export default function PoolAnalytics({
     }
     setVolumeData(nextVolumeData);
     setTvlData(nextTvlData);
-  };
+  }, [timeframe]);
 
   useEffect(() => {
     generateMockData();

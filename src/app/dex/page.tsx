@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ethers } from 'ethers';
 import DexAIAssistant from './components/DexAIAssistant';
@@ -94,7 +94,7 @@ export default function DexPage() {
   }, [POLYGON_AMOY_CONFIG.chainId]);
 
   // Load token balances
-  const loadBalances = async () => {
+  const loadBalances = useCallback(async () => {
     if (!signer || !address) return;
 
     try {
@@ -114,14 +114,14 @@ export default function DexPage() {
     } catch (error) {
       console.error('Error loading balances:', error);
     }
-  };
+  }, [signer, address]);
 
   useEffect(() => {
     loadBalances();
   }, [signer, address, loadBalances]);
 
   // Load pool data
-  const loadPools = async () => {
+  const loadPools = useCallback(async () => {
     if (!signer) return;
 
     try {
@@ -192,7 +192,7 @@ export default function DexPage() {
     } catch (error) {
       console.error('Error loading pools:', error);
     }
-  };
+  }, [signer]);
 
   useEffect(() => {
     loadPools();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { wrapToken, isWrapUnwrapOperation, WrapResult } from '../utils/wrapUtils';
 import { useTransactionSimulator } from '../../hooks/useTransactionSimulator';
@@ -87,7 +87,7 @@ export default function TokenSwap({
     error: simulationError 
   } = useTransactionSimulator();
 
-  const getQuote = async () => {
+  const getQuote = useCallback(async () => {
     if (!address || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken === toToken) {
       setQuote('');
       return;
@@ -183,7 +183,7 @@ export default function TokenSwap({
     } finally {
       setIsQuoteLoading(false);
     }
-  };
+  }, [address, fromAmount, fromToken, toToken, onStatusChange]);
 
   // Recalculate quote when inputs change
   useEffect(() => {
@@ -267,9 +267,7 @@ export default function TokenSwap({
         };
       } else {
         const addr = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
-        const hop = tokens[wrappedSymbol] ? wrappedSymbol : undefined;
         const direct = [addr(fromToken), addr(toToken)];
-        // const viaWrapped = hop && fromToken !== hop && toToken !== hop ? [addr(fromToken), addr(hop), addr(toToken)] : undefined;
         const path = direct; // Use direct path for simulation
         
         const amountOutMin = ethers.parseUnits(
