@@ -181,7 +181,7 @@ export default function TokenSwap({
     } finally {
       setIsQuoteLoading(false);
     }
-  }, [address, fromAmount, fromToken, toToken, onStatusChange]);
+  }, [address, fromAmount, fromToken, toToken, onStatusChange, nativeSymbol, prices, tokens, uniswapRouterAddress, wrappedSymbol]);
 
   // Recalculate quote when inputs change
   useEffect(() => {

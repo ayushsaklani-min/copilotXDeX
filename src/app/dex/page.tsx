@@ -192,7 +192,7 @@ export default function DexPage() {
     } catch (error) {
       console.error('Error loading pools:', error);
     }
-  }, [signer]);
+  }, [signer, address]);
 
   useEffect(() => {
     loadPools();
