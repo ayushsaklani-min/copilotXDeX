@@ -1,4 +1,5 @@
 require("dotenv").config();
+require('dotenv').config();
 require("@nomicfoundation/hardhat-toolbox");
 
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -15,7 +16,15 @@ module.exports = {
   networks: {
     amoy: {
       url: process.env.RPC_URL || "https://rpc-amoy.polygon.technology/",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      accounts: (() => {
+        let pk = process.env.PRIVATE_KEY || '';
+        if (!pk) return [];
+        pk = pk.trim();
+        if (!pk.startsWith('0x')) pk = '0x' + pk;
+        // Keep only 0x + 64 hex chars
+        if (pk.length > 66) pk = pk.slice(0, 66);
+        return [pk];
+      })(),
       chainId: 80002,
       gasPrice: 20000000000, // 20 gwei
       timeout: 60000,

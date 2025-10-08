@@ -6,6 +6,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+interface IReputation {
+    function getScore(address user) external view returns (uint256);
+}
+
 /**
  * @title TikTakDex
  * @dev Uniswap V2-style AMM DEX for TIK-TAK-TOE tokens
@@ -19,6 +23,9 @@ contract TikTakDex is Ownable {
     uint256 public constant LP_FEE = 25; // 0.25%
     uint256 public constant OWNER_FEE = 5; // 0.05%
     uint256 public constant TOTAL_FEE = LP_FEE + OWNER_FEE; // 0.3%
+
+    // Reputation config
+    address public reputationContract;
 
     // Structs
     struct Pair {
@@ -45,8 +52,13 @@ contract TikTakDex is Ownable {
     event LiquidityRemoved(address indexed pairKey, address indexed user, uint256 amount0, uint256 amount1, uint256 lpAmount);
     event Swap(address indexed pairKey, address indexed user, address indexed tokenIn, uint256 amountIn, uint256 amountOut);
     event Sync(address indexed pairKey, uint256 reserve0, uint256 reserve1);
+    event FeeAdjusted(address indexed user, uint256 reputation, uint256 feePercent);
 
     constructor() Ownable(msg.sender) {}
+
+    function setReputationContract(address _addr) external onlyOwner {
+        reputationContract = _addr;
+    }
 
     /**
      * @dev Add supported tokens to the DEX
@@ -249,10 +261,21 @@ contract TikTakDex is Ownable {
             pair.reserve1 = pair.reserve1 + amountIn;
         }
 
-        // Transfer output tokens
-        IERC20(tokenOut).safeTransfer(to, amountOut);
+        // Adjust for dynamic fee based on reputation
+        uint256 feePercent = getUserFeeRate(msg.sender); // in basis points (e.g., 30 = 0.30%)
+        uint256 fee = (amountOut * feePercent) / FEE_DENOMINATOR;
+        uint256 amountOutAfterFee = amountOut - fee;
 
-        emit Swap(address(pair.lpToken), to, tokenIn, amountIn, amountOut);
+        // Transfer output tokens after fee
+        IERC20(tokenOut).safeTransfer(to, amountOutAfterFee);
+
+        // Accumulate owner fee portion as native units (for simplicity we don't split per token here)
+        // Note: In a production system, fees should be accounted per token. Here we keep existing owner fee mechanism
+        // and emit event for visibility.
+        uint256 reputation = reputationContract == address(0) ? 0 : IReputation(reputationContract).getScore(msg.sender);
+        emit FeeAdjusted(msg.sender, reputation, feePercent);
+
+        emit Swap(address(pair.lpToken), to, tokenIn, amountIn, amountOutAfterFee);
         emit Sync(address(pair.lpToken), pair.reserve0, pair.reserve1);
     }
 
@@ -286,7 +309,10 @@ contract TikTakDex is Ownable {
         require(amountIn > 0, "TikTakDex: INSUFFICIENT_INPUT_AMOUNT");
         require(reserveIn > 0 && reserveOut > 0, "TikTakDex: INSUFFICIENT_LIQUIDITY");
 
-        uint256 amountInWithFee = amountIn * (FEE_DENOMINATOR - TOTAL_FEE);
+        uint256 userFee = getUserFeeRate(msg.sender);
+        // Translate user fee to pair pricing fee equivalent (TOTAL_FEE is 0.3% baseline)
+        // We model pricing fee with "userFee" directly.
+        uint256 amountInWithFee = amountIn * (FEE_DENOMINATOR - userFee);
         uint256 numerator = amountInWithFee * reserveOut;
         uint256 denominator = (reserveIn * FEE_DENOMINATOR) + amountInWithFee;
         amountOut = numerator / denominator;
@@ -322,8 +348,9 @@ contract TikTakDex is Ownable {
         require(amountOut > 0, "TikTakDex: INSUFFICIENT_OUTPUT_AMOUNT");
         require(reserveIn > 0 && reserveOut > 0, "TikTakDex: INSUFFICIENT_LIQUIDITY");
 
+        uint256 userFee = getUserFeeRate(msg.sender);
         uint256 numerator = reserveIn * amountOut * FEE_DENOMINATOR;
-        uint256 denominator = (reserveOut - amountOut) * (FEE_DENOMINATOR - TOTAL_FEE);
+        uint256 denominator = (reserveOut - amountOut) * (FEE_DENOMINATOR - userFee);
         amountIn = (numerator / denominator) + 1;
     }
 
@@ -375,6 +402,17 @@ contract TikTakDex is Ownable {
      */
     function getAllTokens() external view returns (address[] memory) {
         return allTokens;
+    }
+
+    function getUserFeeRate(address user) public view returns (uint256) {
+        if (reputationContract == address(0)) {
+            return TOTAL_FEE; // default 0.3%
+        }
+        uint256 score = IReputation(reputationContract).getScore(user);
+        if (score >= 500) return 5;      // 0.05%
+        if (score >= 100) return 10;     // 0.1%
+        if (score >= 50) return 20;      // 0.2%
+        return 30;                        // 0.3%
     }
 
     /**

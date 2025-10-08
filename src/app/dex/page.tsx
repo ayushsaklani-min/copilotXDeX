@@ -38,6 +38,7 @@ export default function DexPage() {
   const [toAmount, setToAmount] = useState('');
   const [isSwapping, setIsSwapping] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
+  const [feeRateBps, setFeeRateBps] = useState<number | null>(null);
 
   // Liquidity state
   const [liquidityTab, setLiquidityTab] = useState<'add' | 'remove'>('add');
@@ -47,6 +48,10 @@ export default function DexPage() {
   const [amountA, setAmountA] = useState('');
   const [amountB, setAmountB] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  // Remove liquidity state
+  const [removePool, setRemovePool] = useState('TIK-TOE');
+  const [lpAmount, setLpAmount] = useState('');
+  const [isRemoving, setIsRemoving] = useState(false);
 
   // Pool data
   const [pools, setPools] = useState<Array<{ name: string; token0: string; token1: string; lpToken: string; reserve0: string; reserve1: string; tvl: number; pairKey: string; totalSupply: string }>>([]);
@@ -270,12 +275,14 @@ export default function DexPage() {
   const calculateOutput = useCallback(async () => {
     if (!signer || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken === toToken) {
       setToAmount('');
+      setFeeRateBps(null);
       return;
     }
 
     try {
       const dexAbi = [
         "function getAmountOut(uint256 amountIn, address tokenIn, address tokenOut) external view returns (uint256)",
+        "function getUserFeeRate(address user) external view returns (uint256)"
       ];
       
       const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
@@ -283,10 +290,16 @@ export default function DexPage() {
       const amountOutWei = await dex.getAmountOut(amountInWei, TOKENS[fromToken as keyof typeof TOKENS], TOKENS[toToken as keyof typeof TOKENS]);
       const amountOut = ethers.formatEther(amountOutWei);
       
+      try {
+        const rate = await dex.getUserFeeRate(address);
+        setFeeRateBps(Number(rate));
+      } catch {}
+      
       setToAmount(amountOut);
     } catch (error) {
       console.error('Error calculating output:', error);
       setToAmount('');
+      setFeeRateBps(null);
     }
   }, [signer, fromAmount, fromToken, toToken]);
 
@@ -353,6 +366,19 @@ export default function DexPage() {
       );
       
       const receipt = await tx.wait();
+
+      // Attempt reputation +1 here too for direct DEX swaps page (defensive duplicate)
+      try {
+        const { REPUTATION_ABI, REPUTATION_ADDRESS } = await import("../../constants/reputation");
+        const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
+        if (repAddr) {
+          const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
+          await rep.updateScore(address, 1);
+          console.log('Reputation +1 for swap');
+        }
+      } catch (e) {
+        console.warn('Reputation update swap failed', e);
+      }
       
       setStatus({ 
         message: `Swap successful! TX: ${receipt.hash.slice(0, 10)}...`, 
@@ -482,6 +508,19 @@ export default function DexPage() {
         message: `Liquidity added! TX: ${receipt.hash.slice(0, 10)}...`, 
         type: 'success' 
       });
+
+      // Attempt reputation +2 for successful add-liquidity
+      try {
+        const { REPUTATION_ABI, REPUTATION_ADDRESS } = await import("../../constants/reputation");
+        const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
+        if (repAddr && signer && address) {
+          const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
+          await rep.updateScore(address, 2);
+          console.log('Reputation +2 for liquidity add');
+        }
+      } catch (e) {
+        console.warn('Reputation update liquidity failed', e);
+      }
       
       // Reset form
       setAmountA('');
@@ -502,6 +541,73 @@ export default function DexPage() {
       }
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  // Remove liquidity
+  const handleRemoveLiquidity = async () => {
+    if (!signer || !address) return;
+
+    const pool = pools.find((p) => p.name === removePool);
+    if (!pool) {
+      setStatus({ message: 'Pool not found', type: 'error' });
+      return;
+    }
+
+    if (!lpAmount || parseFloat(lpAmount) <= 0) {
+      setStatus({ message: 'Please enter valid LP amount', type: 'error' });
+      return;
+    }
+
+    setIsRemoving(true);
+    setStatus({ message: 'Removing liquidity...', type: 'info' });
+
+    try {
+      const dexAbi = [
+        'function removeLiquidity(address token0, address token1, uint256 lpAmount, address to) external returns (uint256, uint256)'
+      ];
+
+      const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
+      const lpAmountWei = ethers.parseEther(lpAmount);
+
+      const feeData = await signer.provider?.getFeeData();
+      const gasPrice = feeData?.gasPrice ? feeData.gasPrice * BigInt(2) : ethers.parseUnits('30', 'gwei');
+
+      const tx = await dex.removeLiquidity(
+        pool.token0,
+        pool.token1,
+        lpAmountWei,
+        address,
+        {
+          gasLimit: 300000,
+          gasPrice: gasPrice
+        }
+      );
+
+      const receipt = await tx.wait();
+
+      setStatus({
+        message: `Liquidity removed! TX: ${receipt.hash.slice(0, 10)}...`,
+        type: 'success'
+      });
+
+      setLpAmount('');
+      // Refresh balances and pools
+      await Promise.all([loadBalances(), loadPools()]);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      console.error('Remove liquidity error:', error);
+      if (err.message?.includes('insufficient funds')) {
+        setStatus({ message: 'Insufficient funds for gas fees', type: 'error' });
+      } else if (err.message?.includes('user rejected')) {
+        setStatus({ message: 'Transaction rejected by user', type: 'error' });
+      } else if (err.message?.includes('execution reverted')) {
+        setStatus({ message: 'Transaction failed - check LP balance', type: 'error' });
+      } else {
+        setStatus({ message: `Remove liquidity failed: ${err.message || 'Unknown error'}`, type: 'error' });
+      }
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -699,6 +805,16 @@ export default function DexPage() {
 
                 {/* Action Buttons */}
                 <div className="space-y-3">
+                  {feeRateBps !== null && (
+                    <div className="text-sm text-gray-300 flex items-center gap-2">
+                      <span>
+                        Fee Rate: <span className="text-white font-semibold">{(feeRateBps / 100).toFixed(2)}%</span>
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 border border-white/10">
+                        {feeRateBps <= 5 ? '💎 Diamond' : feeRateBps <= 10 ? '🥇 Gold' : feeRateBps <= 20 ? '🥈 Silver' : '🥉 Bronze'}
+                      </span>
+                    </div>
+                  )}
                   {!isApproved && fromAmount && (
                     <button
                       onClick={handleApprove}
@@ -870,10 +986,58 @@ export default function DexPage() {
 
                 {liquidityTab === 'remove' && (
                   <div className="space-y-6">
-                    <div className="text-center py-12">
-                      <div className="text-gray-400 mb-4">Remove liquidity coming soon!</div>
-                      <div className="text-sm text-gray-500">This feature will be available soon</div>
+                    {/* Pool Selection */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-300 mb-2">Select Pool</label>
+                      <select
+                        value={removePool}
+                        onChange={(e) => setRemovePool(e.target.value)}
+                        className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-gray-600 focus:border-cyan-500 focus:outline-none"
+                      >
+                        {pools.map((pool) => (
+                          <option key={pool.name} value={pool.name} className="bg-gray-800 text-white">
+                            {pool.name} (Your LP: {parseFloat(userLpBalances[pool.name] || '0').toFixed(6)})
+                          </option>
+                        ))}
+                      </select>
                     </div>
+
+                    {/* LP Amount */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-300 mb-2">LP Token Amount</label>
+                      <div className="bg-white/5 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-white font-semibold text-lg">LP Tokens</span>
+                          <button
+                            onClick={() => setLpAmount((userLpBalances[removePool] || '0'))}
+                            className="px-3 py-1 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-semibold transition-colors"
+                          >
+                            MAX
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          value={lpAmount}
+                          onChange={(e) => setLpAmount(e.target.value)}
+                          placeholder="0.0"
+                          className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
+                          step="0.000001"
+                          min="0"
+                        />
+                        <div className="text-sm text-gray-400 mt-1">
+                          Balance: {parseFloat(userLpBalances[removePool] || '0').toFixed(6)} LP
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Remove Liquidity Button */}
+                    <button
+                      onClick={handleRemoveLiquidity}
+                      disabled={isRemoving || !lpAmount || parseFloat(lpAmount) <= 0}
+                      className="w-full py-4 px-6 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 disabled:from-gray-500 disabled:to-gray-500 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
+                    >
+                      {isRemoving ? 'Removing Liquidity...' : 'Remove Liquidity'}
+                    </button>
                   </div>
                 )}
               </div>

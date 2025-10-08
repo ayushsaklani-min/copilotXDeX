@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ethers } from 'ethers';
+import { REPUTATION_ABI, REPUTATION_ADDRESS } from "../constants/reputation";
 
 interface LiquidityPool {
   name: string;
@@ -187,6 +188,18 @@ export function useLiquidity(signer: ethers.JsonRpcSigner | null, address: strin
       // Add liquidity
       const tx = await dexContract.addLiquidity(tokenA, tokenB, amountAWei, amountBWei, address);
       const receipt = await tx.wait();
+
+      // Reputation: +2 for successful add-liquidity
+      try {
+        const localAddr = (typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('reputationAddress') : null) || REPUTATION_ADDRESS;
+        if (localAddr) {
+          const rep = new ethers.Contract(localAddr, REPUTATION_ABI, signer);
+          await rep.updateScore(address, 2);
+          console.log("Reputation +2 for liquidity add");
+        }
+      } catch (e) {
+        console.warn("Reputation update liquidity failed", e);
+      }
 
       // Refresh pool data
       await refreshPools();

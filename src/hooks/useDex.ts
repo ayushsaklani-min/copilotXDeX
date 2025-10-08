@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
+import { REPUTATION_ABI, REPUTATION_ADDRESS } from "../constants/reputation";
 
 // Contract configuration (will be loaded from contracts.json)
 interface ContractConfig {
@@ -218,6 +219,18 @@ export const useDex = (
       );
 
       await tx.wait();
+
+      // Reputation: +1 for successful swap (safe, non-blocking)
+      try {
+        const localAddr = (typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('reputationAddress') : null) || REPUTATION_ADDRESS;
+        if (localAddr) {
+          const rep = new ethers.Contract(localAddr, REPUTATION_ABI, signer);
+          await rep.updateScore(to, 1);
+          console.log("Reputation +1 for swap");
+        }
+      } catch (e) {
+        console.warn("Reputation update swap failed", e);
+      }
       return tx.hash;
     } catch (err) {
       console.error('Error executing swap:', err);

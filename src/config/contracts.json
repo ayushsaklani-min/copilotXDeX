@@ -38,5 +38,8 @@
     "timestamp": "2025-10-04T23:11:36.886Z",
     "blockNumber": 27280938,
     "transactionHash": "0xc7e7a2efebd20532a67c6b8a1ac9afc27f1b4e136c1a1848f6f06825fe911d93"
-  }
+  },
+  "tokenFactoryAddress": "0x68F18B79F942B1e2Ad4Df83b8b5D3822696Cdf8A"
+  ,
+  "reputationAddress": "0x07535D0f538689918901e53bC8ab25bb7ee66237"
 }

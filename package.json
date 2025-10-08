@@ -9,6 +9,7 @@
     "lint": "eslint",
     "compile": "npx hardhat compile",
     "deploy:amoy": "npx hardhat run --network amoy scripts/deploy.js",
+    "set:reputation": "REPUTATION_ADDRESS=0x07535D0f538689918901e53bC8ab25bb7ee66237 npx hardhat run --network amoy scripts/setReputation.js",
     "test": "npx hardhat test",
     "test:coverage": "npx hardhat coverage",
     "start:dex": "npm run dev"
