@@ -29,11 +29,23 @@ export default function ReputationBadge(){
 
   const { score } = useReputation(signer, address);
 
+  const tier = React.useMemo(() => {
+    if (score >= 1000) return { name: "Crystal", color: "bg-fuchsia-600" };
+    if (score >= 500) return { name: "Diamond", color: "bg-purple-600" };
+    if (score >= 250) return { name: "Gold", color: "bg-amber-600" };
+    if (score >= 100) return { name: "Silver", color: "bg-zinc-500" };
+    return { name: "Bronze", color: "bg-orange-600" };
+  }, [score]);
+
   if (!address) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 bg-cyan-600/80 text-white px-4 py-2 rounded-xl text-sm shadow-lg z-50">
-      Reputation Score: <span className="font-bold">{score}</span>
+    <div className={`fixed bottom-4 right-4 ${tier.color}/80 text-white px-4 py-2 rounded-xl text-sm shadow-lg z-50 flex items-center gap-2`}>
+      <span className="inline-block h-2 w-2 rounded-full bg-white/90" />
+      <span className="font-semibold">{tier.name}</span>
+      <span className="opacity-80">•</span>
+      <span>Score:</span>
+      <span className="font-bold">{score}</span>
     </div>
   );
 }

@@ -2,14 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
+import contracts from '@/config/contracts.json';
 
-const TOKENS = {
-  TIK: '0xf0dc4aa8063810B4116091371a74D55856c9Fa87',
-  TAK: '0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3',
-  TOE: '0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc',
-};
-
-const DEX_ADDRESS = '0x3Db5A1C4bE6C21ceCaf3E74611Bd55F41651f0Ba';
+const TOKENS = contracts.tokens as Record<string, string>;
+const DEX_ADDRESS = contracts.dexAddress as string;
 
 export default function SwapTest() {
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
@@ -87,7 +83,10 @@ export default function SwapTest() {
         TOKENS.TIK,
         TOKENS.TOE,
         amountInWei,
-        address
+        address,
+        {
+          gasLimit: 250000
+        }
       );
       const receipt = await swapTx.wait();
       

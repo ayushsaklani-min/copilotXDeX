@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { ethers } from 'ethers';
+import { useAnalytics } from '../../../hooks/useAnalytics';
 
 interface PoolAnalyticsProps {
-  signer: unknown;
+  signer: ethers.JsonRpcSigner | null;
   address: string | null;
   isConnected: boolean;
   isCorrectNetwork: boolean;
@@ -18,8 +20,12 @@ export default function PoolAnalytics({
   prices,
 }: PoolAnalyticsProps) {
   const [timeframe, setTimeframe] = useState<'24h' | '7d' | '30d'>('24h');
-  const [volumeData, setVolumeData] = useState<Array<{ time: string; volume: number; trades: number }>>([]);
-  const [tvlData, setTvlData] = useState<Array<{ time: string; tvl: number }>>([]);
+  
+  // Use real analytics data instead of mock
+  const { data: analyticsData, isLoading, error, refreshData } = useAnalytics(
+    isConnected && isCorrectNetwork ? (dex as any).signer : null,
+    timeframe
+  );
 
   // Small SVG chart components (no external deps)
   const SimpleBarChart = ({ data, height = 300 }: { data: { volume: number; trades?: number; time: string }[]; height?: number }) => {
@@ -177,44 +183,19 @@ export default function PoolAnalytics({
     );
   };
 
-  // Mock data generation (in real implementation, you'd fetch from subgraph or events)
-  const generateMockData = useCallback(() => {
-    const dataPoints = timeframe === '24h' ? 24 : timeframe === '7d' ? 7 : 30;
-    const interval = timeframe === '24h' ? 1 : timeframe === '7d' ? 1 : 1;
-    const nextVolumeData: Array<{ time: string; volume: number; trades: number }> = [];
-    const nextTvlData: Array<{ time: string; tvl: number }> = [];
-    for (let i = 0; i < dataPoints; i++) {
-      const timestamp = new Date();
-      timestamp.setHours(timestamp.getHours() - (dataPoints - i) * interval);
-      const baseVolume = 1000 + Math.random() * 5000;
-      const baseTvl = 50000 + Math.random() * 20000;
-      nextVolumeData.push({
-        time: timeframe === '24h' ? timestamp.getHours().toString().padStart(2, '0') + ':00' : timestamp.toLocaleDateString(),
-        volume: baseVolume + Math.sin(i * 0.5) * 1000,
-        trades: Math.floor(Math.random() * 50) + 10,
-      });
-      nextTvlData.push({
-        time: timeframe === '24h' ? timestamp.getHours().toString().padStart(2, '0') + ':00' : timestamp.toLocaleDateString(),
-        tvl: baseTvl + Math.sin(i * 0.3) * 5000,
-      });
-    }
-    setVolumeData(nextVolumeData);
-    setTvlData(nextTvlData);
-  }, [timeframe]);
-
-  useEffect(() => {
-    generateMockData();
-  }, [timeframe, generateMockData]);
+  // Use real data from analytics hook
+  const volumeData = analyticsData.volumeData;
+  const tvlData = analyticsData.tvlData;
 
   // Auto-refresh charts periodically
   useEffect(() => {
-    const id = setInterval(generateMockData, 15000);
+    const id = setInterval(refreshData, 15000);
     return () => clearInterval(id);
-  }, [timeframe, generateMockData]);
+  }, [refreshData]);
 
-  const totalVolume = volumeData.reduce((sum, item) => sum + item.volume, 0);
-  const totalTrades = volumeData.reduce((sum, item) => sum + item.trades, 0);
-  const avgTvl = tvlData.reduce((sum, item) => sum + item.tvl, 0) / tvlData.length;
+  const totalVolume = analyticsData.totalVolume;
+  const totalTrades = analyticsData.totalTrades;
+  const avgTvl = analyticsData.currentTVL;
 
   if (!isConnected) {
     return (
@@ -230,6 +211,30 @@ export default function PoolAnalytics({
       <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-red-500/30 p-8 text-center">
         <h2 className="text-2xl font-bold text-red-300 mb-4">Wrong Network</h2>
         <p className="text-gray-300">Please switch to Polygon Amoy network</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-8 text-center">
+        <h2 className="text-2xl font-bold text-white mb-4">Loading Analytics...</h2>
+        <p className="text-gray-300">Fetching real-time data from blockchain</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-red-500/30 p-8 text-center">
+        <h2 className="text-2xl font-bold text-red-400 mb-4">Error Loading Data</h2>
+        <p className="text-gray-300">{error}</p>
+        <button 
+          onClick={refreshData}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
       </div>
     );
   }

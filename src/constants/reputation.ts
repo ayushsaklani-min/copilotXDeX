@@ -7,7 +7,8 @@ export const REPUTATION_ADDRESS = ((contracts as any).reputationAddress as strin
 export const REPUTATION_ABI = [
   "function updateScore(address user,uint256 points) external",
   "function getScore(address user) external view returns(uint256)",
-  "function owner() external view returns(address)"
+  "function owner() external view returns(address)",
+  "event ScoreUpdated(address indexed user,uint256 newScore,uint256 addedPoints,address indexed caller)"
 ];
 
 export function setReputationAddressLocal(addr: string) {

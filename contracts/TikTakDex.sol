@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 interface IReputation {
     function getScore(address user) external view returns (uint256);
+    function updateScore(address user, uint256 points) external;
 }
 
 /**
@@ -53,6 +54,7 @@ contract TikTakDex is Ownable {
     event Swap(address indexed pairKey, address indexed user, address indexed tokenIn, uint256 amountIn, uint256 amountOut);
     event Sync(address indexed pairKey, uint256 reserve0, uint256 reserve1);
     event FeeAdjusted(address indexed user, uint256 reputation, uint256 feePercent);
+    event ReputationAwarded(address indexed user, uint256 points, bytes32 indexed pairKey, bytes32 action);
 
     constructor() Ownable(msg.sender) {}
 
@@ -178,6 +180,9 @@ contract TikTakDex is Ownable {
 
         emit LiquidityAdded(address(pair.lpToken), to, amount0, amount1, lpAmount);
         emit Sync(address(pair.lpToken), pair.reserve0, pair.reserve1);
+
+        // Award reputation points for adding liquidity (+2 XP)
+        _awardReputation(to, 2, pairKey, "ADD_LIQ");
     }
 
     /**
@@ -277,6 +282,9 @@ contract TikTakDex is Ownable {
 
         emit Swap(address(pair.lpToken), to, tokenIn, amountIn, amountOutAfterFee);
         emit Sync(address(pair.lpToken), pair.reserve0, pair.reserve1);
+
+        // Award reputation points for swapping (+1 XP)
+        _awardReputation(msg.sender, 1, pairKey, "SWAP");
     }
 
     /**
@@ -370,6 +378,17 @@ contract TikTakDex is Ownable {
             return (pair.reserve0, pair.reserve1);
         } else {
             return (pair.reserve1, pair.reserve0);
+        }
+    }
+
+    function _awardReputation(address user, uint256 points, bytes32 pairKey, bytes32 action) internal {
+        if (reputationContract == address(0)) return;
+        // Gamified scheme based on action points
+        // Use try/catch to prevent reverts from breaking core DEX flows
+        try IReputation(reputationContract).updateScore(user, points) {
+            emit ReputationAwarded(user, points, pairKey, action);
+        } catch {
+            // ignore failures
         }
     }
 

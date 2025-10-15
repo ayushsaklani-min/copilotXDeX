@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ethers } from 'ethers';
+import { motion, AnimatePresence } from 'framer-motion';
 import DexAIAssistant from './components/DexAIAssistant';
 import PoolAnalytics from './components/PoolAnalytics';
 import { usePrices } from '../../hooks/usePrices';
+import contracts from '../../config/contracts.json';
 
 const getExternalProvider = (): ethers.Eip1193Provider => {
   const maybeWindow = window as unknown as { ethereum?: unknown };
@@ -15,13 +17,9 @@ const getExternalProvider = (): ethers.Eip1193Provider => {
   return maybeWindow.ethereum as ethers.Eip1193Provider;
 };
 
-const TOKENS = {
-  TIK: '0xf0dc4aa8063810B4116091371a74D55856c9Fa87',
-  TAK: '0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3',
-  TOE: '0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc',
-};
+const TOKENS = contracts.tokens as Record<string, string>;
 
-const DEX_ADDRESS = '0x3Db5A1C4bE6C21ceCaf3E74611Bd55F41651f0Ba';
+const DEX_ADDRESS = contracts.dexAddress as string;
 
 export default function DexPage() {
   const [activeTab, setActiveTab] = useState<'swap' | 'liquidity' | 'analytics' | 'ai'>('swap');
@@ -59,8 +57,8 @@ export default function DexPage() {
   const [userLpBalances, setUserLpBalances] = useState<{ [key: string]: string }>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Prices (mocked for now)
-  const { prices } = usePrices();
+  // Prices from real reserves
+  const { prices } = usePrices(signer);
 
   // Network configuration
   const POLYGON_AMOY_CONFIG = {
@@ -136,20 +134,7 @@ export default function DexPage() {
 
       const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
       
-      const poolConfigs = [
-        {
-          name: 'TIK-TOE',
-          token0: TOKENS.TIK,
-          token1: TOKENS.TOE,
-          lpToken: '0x9999e190b6Ab99B0AC123b880b0A51171e74BfFA',
-        },
-        {
-          name: 'TAK-TOE',
-          token0: TOKENS.TAK,
-          token1: TOKENS.TOE,
-          lpToken: '0x7287fe333C0432c1c48602A4838e5d96db65ED49',
-        },
-      ];
+      const poolConfigs = (contracts.pairs as Array<{ name: string; token0: string; token1: string; lpToken: string }>);
 
       const poolsData: Array<{ name: string; token0: string; token1: string; lpToken: string; reserve0: string; reserve1: string; tvl: number; pairKey: string; totalSupply: string }> = [];
       const lpBalances: { [key: string]: string } = {};
@@ -362,7 +347,10 @@ export default function DexPage() {
         TOKENS[fromToken as keyof typeof TOKENS],
         TOKENS[toToken as keyof typeof TOKENS],
         amountInWei,
-        address
+        address,
+        {
+          gasLimit: 250000
+        }
       );
       
       const receipt = await tx.wait();
@@ -719,10 +707,18 @@ export default function DexPage() {
         </div>
 
         {/* Tab Content */}
-        <div className={`grid ${activeTab === 'liquidity' ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'} gap-8`}>
-          {/* Main Panel */}
-          <div className={`${activeTab === 'liquidity' ? 'lg:col-span-2' : ''}`}>
-            {activeTab === 'swap' && (
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className={`grid ${activeTab === 'liquidity' ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'} gap-8`}
+          >
+            {/* Main Panel */}
+            <div className={`${activeTab === 'liquidity' ? 'lg:col-span-2' : ''}`}>
+              {activeTab === 'swap' && (
               <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-8 min-h-[520px]">
                 <h2 className="text-2xl font-bold text-white mb-6">Swap Tokens</h2>
                 
@@ -1162,7 +1158,8 @@ export default function DexPage() {
               </>
             )}
           </div>
-        </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

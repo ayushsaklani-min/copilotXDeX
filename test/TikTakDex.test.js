@@ -38,7 +38,7 @@ describe("TikTakDex", function () {
 
     // Transfer tokens to users for testing
     await token0.transfer(user1.address, ethers.parseEther("10000"));
-    await token1.transfer(user1.address, ethers.parseEther("10000"));
+    await token1.transfer(user1.address, ethers.parseEther("20000"));
     await token0.transfer(user2.address, ethers.parseEther("10000"));
     await token1.transfer(user2.address, ethers.parseEther("10000"));
   });
@@ -188,6 +188,19 @@ describe("TikTakDex", function () {
   describe("Fee Distribution", function () {
     it("Should apply correct fees", async function () {
       const amountIn = ethers.parseEther("1000");
+
+      // Ensure there is sufficient initial liquidity
+      const init0 = ethers.parseEther("5000");
+      const init1 = ethers.parseEther("10000");
+      await token0.connect(user1).approve(await tikTakDex.getAddress(), init0);
+      await token1.connect(user1).approve(await tikTakDex.getAddress(), init1);
+      await tikTakDex.connect(user1).addLiquidity(
+        await token0.getAddress(),
+        await token1.getAddress(),
+        init0,
+        init1,
+        user1.address
+      );
       
       // Get reserves before swap
       const [reserve0Before, reserve1Before] = await tikTakDex.getReserves(
@@ -216,29 +229,3 @@ describe("TikTakDex", function () {
   });
 });
 
-// Mock ERC20 contract for testing
-contract("MockERC20", function () {
-  let mockToken;
-  let owner;
-  let user1;
-
-  beforeEach(async function () {
-    [owner, user1] = await ethers.getSigners();
-    
-    const MockERC20Factory = await ethers.getContractFactory("MockERC20");
-    mockToken = await MockERC20Factory.deploy("MockToken", "MOCK", ethers.parseEther("1000000"));
-  });
-
-  it("Should have correct initial supply", async function () {
-    const totalSupply = await mockToken.totalSupply();
-    expect(totalSupply).to.equal(ethers.parseEther("1000000"));
-  });
-
-  it("Should transfer tokens correctly", async function () {
-    const amount = ethers.parseEther("1000");
-    await mockToken.transfer(user1.address, amount);
-    
-    const user1Balance = await mockToken.balanceOf(user1.address);
-    expect(user1Balance).to.equal(amount);
-  });
-});

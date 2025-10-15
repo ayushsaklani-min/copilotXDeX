@@ -1,0 +1,25 @@
+# Ignore heavy dev/build artifacts from Vercel deployments
+artifacts/
+cache/
+build-info/
+contracts/
+scripts/
+hardhat.config.js
+setup.js
+setup-dex.bat
+setup-dex.sh
+DEPLOYMENT_GUIDE.md
+DEX_README.md
+MOCKSWAP_README.md
+README.md
+
+test/
+
+# Ignore local dev routes not needed in production
+src/app/mockswap-demo/
+src/app/swap-test/
+
+# Ignore UI guide (already removed)
+Web3 Copilot UI_UX Guide/
+
+

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLiquidity } from '../../../hooks/useLiquidity';
 
 interface LiquidityFormProps {
@@ -233,8 +234,16 @@ export default function LiquidityForm({
         </button>
       </div>
 
-      {activeTab === 'add' && (
-        <div className="space-y-6">
+      <AnimatePresence mode="wait">
+        {activeTab === 'add' && (
+          <motion.div
+            key="add"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="space-y-6"
+          >
           {/* Pool Selection */}
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Select Pool</label>
@@ -342,11 +351,18 @@ export default function LiquidityForm({
           >
             {isAdding ? 'Adding Liquidity...' : 'Add Liquidity'}
           </button>
-        </div>
-      )}
+          </motion.div>
+        )}
 
-      {activeTab === 'remove' && (
-        <div className="space-y-6">
+        {activeTab === 'remove' && (
+          <motion.div
+            key="remove"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="space-y-6"
+          >
           {/* Pool Selection */}
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">Select Pool</label>
@@ -426,8 +442,9 @@ export default function LiquidityForm({
           >
             {isRemoving ? 'Removing Liquidity...' : 'Remove Liquidity'}
           </button>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Pool Overview */}
       <div className="mt-8">

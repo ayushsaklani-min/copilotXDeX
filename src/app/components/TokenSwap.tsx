@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { wrapToken, isWrapUnwrapOperation, WrapResult } from '../utils/wrapUtils';
 import { useTransactionSimulator } from '../../hooks/useTransactionSimulator';
+import { REPUTATION_ABI, REPUTATION_ADDRESS } from '../../constants/reputation';
+import contracts from '../../config/contracts.json';
 import TransactionPreviewModal from '../../components/modals/TransactionPreviewModal';
 
 interface TokenInfo {
@@ -109,6 +111,31 @@ export default function TokenSwap({
     setIsQuoteLoading(true);
 
     try {
+      // Prefer on-chain DEX pricing if both tokens are in our DEX
+      const dexTokens = new Set<string>(Object.values(contracts.tokens as Record<string, string>).map(a => a.toLowerCase()));
+      const addrOf = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
+      const tokenInAddr = addrOf(fromToken).toLowerCase();
+      const tokenOutAddr = addrOf(toToken).toLowerCase();
+      if (dexTokens.has(tokenInAddr) && dexTokens.has(tokenOutAddr)) {
+        const provider = new ethers.BrowserProvider(getExternalProvider());
+        const dex = new ethers.Contract(
+          (contracts as any).dexAddress,
+          (contracts as any).abis.TikTakDex as string[],
+          provider
+        );
+        const amountIn = ethers.parseUnits(
+          fromAmount,
+          fromToken === nativeSymbol ? 18 : tokens[fromToken].decimals
+        );
+        const amountOutWei = await dex.getAmountOut(amountIn, addrOf(fromToken), addrOf(toToken));
+        const out = ethers.formatUnits(
+          amountOutWei,
+          toToken === nativeSymbol ? 18 : tokens[toToken].decimals
+        );
+        setQuote(parseFloat(out).toFixed(5));
+        return;
+      }
+
       // Instant quote for native <-> wrapped (1:1)
       if ((fromToken === nativeSymbol && toToken === wrappedSymbol) || (fromToken === wrappedSymbol && toToken === nativeSymbol)) {
         setQuote(parseFloat(fromAmount).toString());
@@ -320,6 +347,55 @@ export default function TokenSwap({
     onStatusChange({ message: 'Executing swap...', type: 'info' });
 
     try {
+      // If both tokens are on our DEX, execute swap via DEX to earn XP
+      const dexTokens = new Set<string>(Object.values(contracts.tokens as Record<string, string>).map(a => a.toLowerCase()));
+      const addrOf = (sym: string) => (sym === nativeSymbol ? tokens[wrappedSymbol].address : tokens[sym].address);
+      const tokenInAddr = addrOf(fromToken).toLowerCase();
+      const tokenOutAddr = addrOf(toToken).toLowerCase();
+      if (dexTokens.has(tokenInAddr) && dexTokens.has(tokenOutAddr)) {
+        const amountIn = fromToken === nativeSymbol
+          ? ethers.parseEther(fromAmount)
+          : ethers.parseUnits(fromAmount, tokens[fromToken].decimals);
+
+        // Approve tokenIn to DEX if needed (only for ERC20 path; native wrapping not supported in our DEX)
+        if (fromToken !== nativeSymbol) {
+          const fromTokenContract = new ethers.Contract(
+            tokens[fromToken].address,
+            ['function approve(address spender, uint256 amount) external returns (bool)', 'function allowance(address owner, address spender) external view returns (uint256)'],
+            signer
+          );
+          const allowance: bigint = await fromTokenContract.allowance(address, (contracts as any).dexAddress);
+          if (allowance < amountIn) {
+            const approveTx = await fromTokenContract.approve((contracts as any).dexAddress, amountIn);
+            await approveTx.wait();
+          }
+        }
+
+        const dex = new ethers.Contract(
+          (contracts as any).dexAddress,
+          (contracts as any).abis.TikTakDex as string[],
+          signer
+        );
+        const tx = await dex.swapExactTokensForTokens(
+          addrOf(fromToken),
+          addrOf(toToken),
+          amountIn,
+          address
+        );
+        await tx.wait();
+
+        onStatusChange({ message: 'Swap successful!', type: 'success' });
+        await onBalancesRefresh();
+
+        // XP awarded on-chain by DEX
+        setIsSwapping(false);
+        setFromAmount('');
+        setQuote('');
+        setShowSimulation(false);
+        clearSimulation();
+        return;
+      }
+
       // Check if this is a wrap/unwrap operation
       if (isWrapUnwrapOperation(fromToken, toToken, nativeSymbol, wrappedSymbol)) {
         const isWrapping = fromToken === nativeSymbol;
@@ -422,6 +498,17 @@ export default function TokenSwap({
       }
 
       onStatusChange({ message: 'Swap successful!', type: 'success' });
+
+      // Best-effort XP: +1 for swap via router flows
+      try {
+        if (address) {
+          const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
+          if (repAddr) {
+            const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
+            await rep.updateScore(address, 1);
+          }
+        }
+      } catch {}
       await onBalancesRefresh();
     } catch (error) {
       console.error("Swap failed", error);

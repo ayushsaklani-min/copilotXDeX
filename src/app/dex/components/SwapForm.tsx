@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import contracts from '../../../config/contracts.json';
 
 interface SwapFormProps {
   signer: ethers.JsonRpcSigner | null;
@@ -13,11 +14,7 @@ interface SwapFormProps {
   prices: Record<string, number>;
 }
 
-const TOKENS = {
-  TIK: '0xf0dc4aa8063810B4116091371a74D55856c9Fa87',
-  TAK: '0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3',
-  TOE: '0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc',
-};
+const TOKENS = contracts.tokens as Record<string, string>;
 
 const TOKEN_SYMBOLS = Object.keys(TOKENS);
 
@@ -109,7 +106,7 @@ export default function SwapForm({
         const contract = new ethers.Contract(TOKENS[fromToken as keyof typeof TOKENS], ERC20_ABI, signer);
         
         // Get DEX address from contract config
-        const dexAddress = '0x3Db5A1C4bE6C21ceCaf3E74611Bd55F41651f0Ba';
+        const dexAddress = contracts.dexAddress as string;
         const allowance = await contract.allowance(address, dexAddress);
         const amountWei = ethers.parseEther(fromAmount);
         
@@ -131,7 +128,7 @@ export default function SwapForm({
       const contract = new ethers.Contract(TOKENS[fromToken as keyof typeof TOKENS], ERC20_ABI, signer);
       
       const amountWei = ethers.parseEther(fromAmount);
-      const dexAddress = '0x3Db5A1C4bE6C21ceCaf3E74611Bd55F41651f0Ba';
+      const dexAddress = contracts.dexAddress as string;
       
       const tx = await contract.approve(dexAddress, amountWei);
       await tx.wait();

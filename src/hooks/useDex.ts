@@ -122,8 +122,42 @@ export const useDex = (
       const tvl = pairsData.reduce((sum, pair) => sum + pair.reserve0 + pair.reserve1, 0);
       setTotalTVL(tvl);
 
-      // Mock 24h volume (in real implementation, you'd track this)
-      setVolume24h(tvl * 0.1); // Assume 10% of TVL as daily volume
+      // Calculate real volume from recent events (simplified approach)
+      // In a production system, you'd query Swap events from the last 24h
+      let volume24h = 0;
+      try {
+        // Get current block and calculate 24h ago
+        const currentBlock = await signer.provider.getBlockNumber();
+        const latestBlock = await signer.provider.getBlock(currentBlock);
+        const nowTs = (latestBlock?.timestamp ?? Math.floor(Date.now() / 1000));
+        const oneDayAgo = nowTs - (24 * 60 * 60);
+        
+        // Query Swap events from the last 24h
+        const swapFilter = dexContract.filters.Swap();
+        const events = await dexContract.queryFilter(swapFilter, -1000); // Last 1000 blocks
+        
+        // Sum up volume from recent events
+        for (const event of events) {
+          // Ethers v6 returns EventLog | Log; only EventLog has args & getBlock
+          const ev = event as unknown as { args?: any; blockNumber?: number };
+          if (!ev.args || typeof ev.blockNumber !== 'number') continue;
+
+          // Filter by time window using block timestamp
+          try {
+            const block = await signer.provider.getBlock(ev.blockNumber);
+            const ts = block?.timestamp ?? 0;
+            if (ts >= oneDayAgo) {
+              const amountIn = parseFloat(ethers.formatEther(ev.args.amountIn ?? 0));
+              volume24h += amountIn;
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Failed to calculate real volume, using estimate:', err);
+        volume24h = tvl * 0.1; // Fallback to 10% of TVL
+      }
+      
+      setVolume24h(volume24h);
 
     } catch (err) {
       console.error('Error refreshing data:', err);
@@ -215,22 +249,15 @@ export const useDex = (
         tokenIn,
         tokenOut,
         amountInWei,
-        to
+        to,
+        {
+          gasLimit: 250000
+        }
       );
 
       await tx.wait();
 
-      // Reputation: +1 for successful swap (safe, non-blocking)
-      try {
-        const localAddr = (typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('reputationAddress') : null) || REPUTATION_ADDRESS;
-        if (localAddr) {
-          const rep = new ethers.Contract(localAddr, REPUTATION_ABI, signer);
-          await rep.updateScore(to, 1);
-          console.log("Reputation +1 for swap");
-        }
-      } catch (e) {
-        console.warn("Reputation update swap failed", e);
-      }
+      // Reputation handled on-chain by DEX
       return tx.hash;
     } catch (err) {
       console.error('Error executing swap:', err);

@@ -1,16 +1,23 @@
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import { REPUTATION_ABI, REPUTATION_ADDRESS } from "../constants/reputation";
+import { REPUTATION_ABI, REPUTATION_ADDRESS, setReputationAddressLocal } from "../constants/reputation";
 
 export function useReputation(signer: ethers.Signer | null, address?: string) {
   const [score, setScore] = useState<number>(0);
 
   const resolveAddress = (): string | undefined => {
     try {
+      const cfg = REPUTATION_ADDRESS;
       if (typeof window !== 'undefined' && window.localStorage) {
         const local = window.localStorage.getItem('reputationAddress') || undefined;
-        return local || REPUTATION_ADDRESS;
+        if (cfg && local !== cfg) {
+          // sync local to config for consistency
+          try { setReputationAddressLocal(cfg); } catch {}
+          return cfg;
+        }
+        return cfg || local;
       }
+      return cfg;
     } catch {}
     return REPUTATION_ADDRESS;
   };

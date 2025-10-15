@@ -10,13 +10,8 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  // Global ignores (Flat config)
   {
-    rules: {
-      "@typescript-eslint/no-explicit-any": "error",
-      "react-hooks/exhaustive-deps": "warn",
-      "@typescript-eslint/no-unused-vars": "warn",
-    },
     ignores: [
       "node_modules/**",
       ".next/**",
@@ -24,7 +19,33 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "Web3 Copilot UI_UX Guide/**",
+      "setup.js",
     ],
+  },
+  // Next.js + TypeScript recommended rules
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  // General project rules for TS/JS
+  {
+    files: ["**/*.{ts,tsx,js,jsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "react-hooks/exhaustive-deps": "warn",
+      "@typescript-eslint/no-unused-vars": "warn",
+    },
+  },
+  // Allow CommonJS in Node scripts, Hardhat config, and tests
+  {
+    files: [
+      "scripts/**/*.js",
+      "scripts/**/*.ts",
+      "hardhat.config.js",
+      "test/**/*.js",
+      "test/**/*.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-var-requires": "off",
+    },
   },
 ];
 

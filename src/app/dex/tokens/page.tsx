@@ -92,18 +92,6 @@ export default function TokensPage() {
     setLoading(true);
     try {
       const token = await createToken(form.name, form.symbol, form.supply);
-      // On successful creation, also attempt a direct reputation update using same signer
-      try {
-        const { REPUTATION_ABI, REPUTATION_ADDRESS } = await import('../../../constants/reputation');
-        const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
-        if (repAddr && signer && address) {
-          const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
-          await rep.updateScore(address, 5);
-          console.log('Reputation +5 for token creation');
-        }
-      } catch (e) {
-        console.warn('Reputation update token failed', e);
-      }
       if (token) {
         // Persist address
         try {
@@ -164,7 +152,8 @@ export default function TokensPage() {
         </div>
 
         <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveTab('tokens')}
               className={`px-3 py-2 rounded-md text-sm font-semibold ${activeTab === 'tokens' ? 'bg-cyan-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`}
@@ -173,37 +162,57 @@ export default function TokensPage() {
               onClick={() => setActiveTab('achievements')}
               className={`px-3 py-2 rounded-md text-sm font-semibold ${activeTab === 'achievements' ? 'bg-cyan-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`}
             >Achievements</button>
+            </div>
+            {address && (
+              <InlineReputationBadge signer={signer} address={address} score={score} />
+            )}
           </div>
 
-          {activeTab === 'tokens' && (
-            <>
-          <h2 className="text-xl font-semibold text-white mb-4">Created Tokens</h2>
-          {tokens.length === 0 ? (
-            <p className="text-gray-400">No tokens created yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {tokens.map((t, i) => (
-                <div key={i} className="p-4 bg-white/5 rounded-lg border border-gray-700">
-                  <div className="font-bold text-lg text-white">
-                    {t.name} ({t.symbol})
+          <AnimatePresence mode="wait">
+            {activeTab === 'tokens' && (
+              <motion.div
+                key="tokens"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              >
+                <h2 className="text-xl font-semibold text-white mb-4">Created Tokens</h2>
+                {tokens.length === 0 ? (
+                  <p className="text-gray-400">No tokens created yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {tokens.map((t, i) => (
+                      <div key={i} className="p-4 bg-white/5 rounded-lg border border-gray-700">
+                        <div className="font-bold text-lg text-white">
+                          {t.name} ({t.symbol})
+                        </div>
+                        <div className="text-gray-300">Supply: {t.supply}</div>
+                        <div className="text-gray-300">
+                          Address: <a className="text-cyan-400" target="_blank" href={`https://amoy.polygonscan.com/address/${t.address}`}>{t.address}</a>
+                        </div>
+                        {address && (
+                          <div className="text-xs text-gray-500">Owner: {address.slice(0,6)}...{address.slice(-4)}</div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <div className="text-gray-300">Supply: {t.supply}</div>
-                  <div className="text-gray-300">
-                    Address: <a className="text-cyan-400" target="_blank" href={`https://amoy.polygonscan.com/address/${t.address}`}>{t.address}</a>
-                  </div>
-                  {address && (
-                    <div className="text-xs text-gray-500">Owner: {address.slice(0,6)}...{address.slice(-4)}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-              )}
-            </>
-          )}
+                )}
+              </motion.div>
+            )}
 
-          {activeTab === 'achievements' && (
-            <AchievementsSection signer={signer} address={address} score={score} />
-          )}
+            {activeTab === 'achievements' && (
+              <motion.div
+                key="achievements"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+              >
+                <AchievementsSection signer={signer} address={address} score={score} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -213,6 +222,7 @@ export default function TokensPage() {
 function AchievementsSection({ signer, address, score }: { signer: ethers.JsonRpcSigner | null; address: string | null; score: number }) {
   const [leaderboard, setLeaderboard] = useState<Array<{ addr: string; score: number }>>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLevelInfo, setShowLevelInfo] = useState(false);
 
   const tierOf = (s: number): { name: string; color: string; icon: string; nextAt: number } => {
     if (s >= 500) return { name: 'Diamond', color: 'text-cyan-300', icon: '💎', nextAt: Infinity };
@@ -285,7 +295,16 @@ function AchievementsSection({ signer, address, score }: { signer: ethers.JsonRp
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-white mb-2">Achievements</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xl font-semibold text-white">Achievements</h2>
+        <button
+          onClick={() => setShowLevelInfo(true)}
+          className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold text-sm shadow-lg shadow-cyan-500/30 transition-all duration-200 flex items-center gap-2"
+        >
+          <span>ℹ️</span>
+          <span>Level Info</span>
+        </button>
+      </div>
       {address ? (
         <div className="p-4 bg-white/5 rounded-lg border border-gray-700">
           <div className="flex items-center justify-between">
@@ -358,6 +377,219 @@ function AchievementsSection({ signer, address, score }: { signer: ethers.JsonRp
       ) : (
         <p className="text-gray-400">Connect your wallet to view achievements.</p>
       )}
+
+      {/* Level Info Dialog */}
+      <AnimatePresence>
+        {showLevelInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowLevelInfo(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 border-2 border-cyan-500/50 shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <span className="text-3xl">🏆</span>
+                    Reputation Level System
+                  </h2>
+                  <button
+                    onClick={() => setShowLevelInfo(false)}
+                    className="text-gray-400 hover:text-white text-2xl leading-none transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Current Status */}
+                <div className="mb-4 p-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30">
+                  <div className="text-xs text-gray-300 mb-1">Your Current Status</div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{userTier.icon}</span>
+                      <div>
+                        <div className={`text-xl font-bold ${userTier.color}`}>{userTier.name}</div>
+                        <div className="text-sm text-white">Reputation: {score} points</div>
+                      </div>
+                    </div>
+                    {isFinite(userTier.nextAt) && (
+                      <div className="text-right">
+                        <div className="text-xs text-gray-400">Next Level</div>
+                        <div className="text-lg font-bold text-cyan-400">{userTier.nextAt - score} to go</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Levels Table */}
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <span>📊</span>
+                    Trading Fee Benefits
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-cyan-500/50">
+                          <th className="text-left py-2 px-3 text-cyan-400 font-semibold text-xs">Score</th>
+                          <th className="text-left py-2 px-3 text-cyan-400 font-semibold text-xs">Level</th>
+                          <th className="text-left py-2 px-3 text-cyan-400 font-semibold text-xs">Fee</th>
+                          <th className="text-left py-2 px-3 text-cyan-400 font-semibold text-xs">Reduction</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className={`border-b border-gray-700/50 ${score < 50 ? 'bg-amber-500/10 ring-1 ring-amber-500/40' : 'hover:bg-white/5'}`}>
+                          <td className="py-2 px-3 text-white text-xs">0-49</td>
+                          <td className="py-2 px-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-600/20 border border-amber-500/30 text-amber-300 font-semibold text-xs">
+                              <span>🥉</span> Bronze
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-white font-bold">0.30%</td>
+                          <td className="py-2 px-3 text-gray-400 text-xs">Default</td>
+                        </tr>
+                        <tr className={`border-b border-gray-700/50 ${score >= 50 && score < 100 ? 'bg-gray-300/10 ring-1 ring-gray-400/40' : 'hover:bg-white/5'}`}>
+                          <td className="py-2 px-3 text-white text-xs">50-99</td>
+                          <td className="py-2 px-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-600/20 border border-gray-400/30 text-gray-200 font-semibold text-xs">
+                              <span>🥈</span> Silver
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-white font-bold">0.20%</td>
+                          <td className="py-2 px-3 text-green-400 font-semibold text-xs">33%</td>
+                        </tr>
+                        <tr className={`border-b border-gray-700/50 ${score >= 100 && score < 500 ? 'bg-yellow-500/10 ring-1 ring-yellow-400/40' : 'hover:bg-white/5'}`}>
+                          <td className="py-2 px-3 text-white text-xs">100-499</td>
+                          <td className="py-2 px-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-600/20 border border-yellow-400/30 text-yellow-300 font-semibold text-xs">
+                              <span>🥇</span> Gold
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-white font-bold">0.10%</td>
+                          <td className="py-2 px-3 text-green-400 font-semibold text-xs">67%</td>
+                        </tr>
+                        <tr className={`${score >= 500 ? 'bg-cyan-500/10 ring-1 ring-cyan-400/40' : 'hover:bg-white/5'}`}>
+                          <td className="py-2 px-3 text-white text-xs">500+</td>
+                          <td className="py-2 px-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-cyan-600/20 border border-cyan-400/30 text-cyan-300 font-semibold text-xs">
+                              <span>💎</span> Platinum
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-white font-bold">0.05%</td>
+                          <td className="py-2 px-3 text-green-400 font-semibold text-xs">83%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* How to Earn Points */}
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <span>⭐</span>
+                    How to Earn Points
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 bg-white/5 border border-cyan-500/30">
+                      <div className="text-2xl mb-1">🔄</div>
+                      <div className="text-sm font-semibold text-white mb-1">Token Swap</div>
+                      <div className="text-xl font-bold text-cyan-400 mb-1">+1 XP</div>
+                      <div className="text-xs text-gray-400">Per swap transaction</div>
+                    </div>
+                    <div className="p-3 bg-white/5 border border-cyan-500/30">
+                      <div className="text-2xl mb-1">💧</div>
+                      <div className="text-sm font-semibold text-white mb-1">Add Liquidity</div>
+                      <div className="text-xl font-bold text-cyan-400 mb-1">+2 XP</div>
+                      <div className="text-xs text-gray-400">Per liquidity add</div>
+                    </div>
+                    <div className="p-3 bg-white/5 border border-cyan-500/30">
+                      <div className="text-2xl mb-1">🪙</div>
+                      <div className="text-sm font-semibold text-white mb-1">Create Token</div>
+                      <div className="text-xl font-bold text-cyan-400 mb-1">+5 XP</div>
+                      <div className="text-xs text-gray-400">Per token created</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Level Progression Examples */}
+                <div className="mb-3">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <span>🎯</span>
+                    Level Progression Guide
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="p-3 bg-gradient-to-r from-gray-600/20 to-gray-700/20 border border-gray-500/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span>🥈</span>
+                        <span className="text-sm font-semibold text-white">To Reach Silver (50 pts):</span>
+                      </div>
+                      <div className="text-xs text-gray-300 pl-6">
+                        • 50 swaps OR 25 liquidity adds OR 10 tokens<br />
+                        • Mix: 20 swaps + 10 liquidity + 2 tokens
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gradient-to-r from-yellow-600/20 to-yellow-700/20 border border-yellow-500/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span>🥇</span>
+                        <span className="text-sm font-semibold text-white">To Reach Gold (100 pts):</span>
+                      </div>
+                      <div className="text-xs text-gray-300 pl-6">
+                        • 100 swaps OR 50 liquidity adds OR 20 tokens<br />
+                        • Mix: 40 swaps + 20 liquidity + 4 tokens
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gradient-to-r from-cyan-600/20 to-cyan-700/20 border border-cyan-500/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span>💎</span>
+                        <span className="text-sm font-semibold text-white">To Reach Platinum (500 pts):</span>
+                      </div>
+                      <div className="text-xs text-gray-300 pl-6">
+                        • 500 swaps OR 250 liquidity adds OR 100 tokens<br />
+                        • Mix: 200 swaps + 100 liquidity + 20 tokens
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Note */}
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30">
+                  <div className="text-xs text-gray-300">
+                    <span className="font-semibold text-white">💡 Pro Tip:</span> Higher levels unlock better trading fees! Keep trading and providing liquidity to level up and save on fees.
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function InlineReputationBadge({ signer, address, score }: { signer: ethers.JsonRpcSigner | null; address: string; score: number }) {
+  const tierOf = (s: number): { name: string; color: string; bg: string } => {
+    if (s >= 1000) return { name: 'Crystal', color: 'text-fuchsia-200', bg: 'bg-fuchsia-600/30' };
+    if (s >= 500) return { name: 'Diamond', color: 'text-purple-200', bg: 'bg-purple-600/30' };
+    if (s >= 250) return { name: 'Gold', color: 'text-amber-200', bg: 'bg-amber-600/30' };
+    if (s >= 100) return { name: 'Silver', color: 'text-zinc-200', bg: 'bg-zinc-600/30' };
+    return { name: 'Bronze', color: 'text-orange-200', bg: 'bg-orange-600/30' };
+  };
+
+  const tier = tierOf(score);
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1 rounded-lg border border-white/10 ${tier.bg}`}>
+      <span className={`text-xs font-semibold ${tier.color}`}>{tier.name}</span>
+      <span className="text-xs text-gray-300">Score:</span>
+      <span className="text-sm font-bold text-white">{score}</span>
     </div>
   );
 }

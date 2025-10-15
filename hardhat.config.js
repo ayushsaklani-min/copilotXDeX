@@ -26,8 +26,8 @@ module.exports = {
         return [pk];
       })(),
       chainId: 80002,
-      gasPrice: 20000000000, // 20 gwei
-      timeout: 60000,
+      gasPrice: 30000000000, // 30 gwei to meet min tip cap
+      timeout: 90000,
     },
     hardhat: {
       chainId: 1337,

@@ -8,6 +8,7 @@ async function main() {
   // Get the contract factories
   const TikTakDex = await hre.ethers.getContractFactory("TikTakDex");
   const TikTakLP = await hre.ethers.getContractFactory("TikTakLP");
+  const Reputation = await hre.ethers.getContractFactory("Reputation");
 
   // Deploy TikTakDex
   console.log("📦 Deploying TikTakDex contract...");
@@ -16,6 +17,20 @@ async function main() {
   const dexAddress = await tikTakDex.getAddress();
   console.log("✅ TikTakDex deployed to:", dexAddress);
 
+  // Deploy Reputation
+  console.log("📦 Deploying Reputation contract...");
+  const [deployer] = await hre.ethers.getSigners();
+  const reputation = await Reputation.deploy(deployer.address);
+  await reputation.waitForDeployment();
+  const reputationAddress = await reputation.getAddress();
+  console.log("✅ Reputation deployed to:", reputationAddress);
+
+  // Grant updater to DEX and set reputation in DEX
+  console.log("🔐 Granting DEX updater role in Reputation...");
+  await (await reputation.grantUpdater(dexAddress)).wait();
+  console.log("🔧 Setting reputation contract in DEX...");
+  await (await tikTakDex.setReputationContract(reputationAddress)).wait();
+
   // Token addresses on Polygon Amoy
   const TOKENS = {
     TIK: "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
@@ -23,53 +38,62 @@ async function main() {
     TOE: "0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc",
   };
 
+  // Add supported tokens first (required by createPair)
+  console.log("🧩 Adding supported tokens...");
+  await (await tikTakDex.addSupportedTokens(Object.values(TOKENS))).wait();
+  console.log("✅ Supported tokens added");
+
   // Create trading pairs
   console.log("🔧 Creating trading pairs...");
   
   // TIK-TAK pair
   console.log("Creating TIK-TAK pair...");
-  const tikTakPair = await tikTakDex.createPair(TOKENS.TIK, TOKENS.TAK);
-  await tikTakPair.wait();
-  const tikTakPairAddress = await tikTakDex.getPair(TOKENS.TIK, TOKENS.TAK);
-  console.log("✅ TIK-TAK pair created at:", tikTakPairAddress);
+  const tikTakPairTx = await tikTakDex.createPair(TOKENS.TIK, TOKENS.TAK);
+  await tikTakPairTx.wait();
+  const tikTakKey = await tikTakDex.getPairKey(TOKENS.TIK, TOKENS.TAK);
+  const tikTakPair = await tikTakDex.getPair(tikTakKey);
+  console.log("✅ TIK-TAK LP token:", tikTakPair.lpToken);
 
   // TIK-TOE pair
   console.log("Creating TIK-TOE pair...");
-  const tikToePair = await tikTakDex.createPair(TOKENS.TIK, TOKENS.TOE);
-  await tikToePair.wait();
-  const tikToePairAddress = await tikTakDex.getPair(TOKENS.TIK, TOKENS.TOE);
-  console.log("✅ TIK-TOE pair created at:", tikToePairAddress);
+  const tikToePairTx = await tikTakDex.createPair(TOKENS.TIK, TOKENS.TOE);
+  await tikToePairTx.wait();
+  const tikToeKey = await tikTakDex.getPairKey(TOKENS.TIK, TOKENS.TOE);
+  const tikToePair = await tikTakDex.getPair(tikToeKey);
+  console.log("✅ TIK-TOE LP token:", tikToePair.lpToken);
 
   // TAK-TOE pair
   console.log("Creating TAK-TOE pair...");
-  const takToePair = await tikTakDex.createPair(TOKENS.TAK, TOKENS.TOE);
-  await takToePair.wait();
-  const takToePairAddress = await tikTakDex.getPair(TOKENS.TAK, TOKENS.TOE);
-  console.log("✅ TAK-TOE pair created at:", takToePairAddress);
+  const takToePairTx = await tikTakDex.createPair(TOKENS.TAK, TOKENS.TOE);
+  await takToePairTx.wait();
+  const takToeKey = await tikTakDex.getPairKey(TOKENS.TAK, TOKENS.TOE);
+  const takToePair = await tikTakDex.getPair(takToeKey);
+  console.log("✅ TAK-TOE LP token:", takToePair.lpToken);
 
   // Get contract ABIs
-  const dexAbi = TikTakDex.interface.format("json");
-  const lpAbi = TikTakLP.interface.format("json");
+  const dexAbi = TikTakDex.interface.format(); // human-readable ABI (string[])
+  const lpAbi = TikTakLP.interface.format();
 
   // Create contracts configuration
   const contractsConfig = {
     network: "polygon-amoy",
     chainId: 80002,
     dexAddress: dexAddress,
+    reputationAddress: reputationAddress,
     tokens: TOKENS,
-    pairs: {
-      "TIK-TAK": tikTakPairAddress,
-      "TIK-TOE": tikToePairAddress,
-      "TAK-TOE": takToePairAddress,
-    },
+    pairs: [
+      { name: "TIK-TAK", token0: TOKENS.TIK, token1: TOKENS.TAK, pairKey: tikTakKey, lpToken: tikTakPair.lpToken },
+      { name: "TIK-TOE", token0: TOKENS.TIK, token1: TOKENS.TOE, pairKey: tikToeKey, lpToken: tikToePair.lpToken },
+      { name: "TAK-TOE", token0: TOKENS.TAK, token1: TOKENS.TOE, pairKey: takToeKey, lpToken: takToePair.lpToken },
+    ],
     abis: {
-      TikTakDex: JSON.parse(dexAbi),
-      TikTakLP: JSON.parse(lpAbi),
+      TikTakDex: dexAbi,
+      TikTakLP: lpAbi,
     },
     deployment: {
       timestamp: new Date().toISOString(),
       blockNumber: await hre.ethers.provider.getBlockNumber(),
-      transactionHash: tikTakPair.hash,
+      transactionHash: tikTakPairTx.hash,
     },
   };
 
@@ -86,9 +110,10 @@ async function main() {
     chainId: 80002,
     contracts: {
       TikTakDex: dexAddress,
-      "TIK-TAK_Pair": tikTakPairAddress,
-      "TIK-TOE_Pair": tikToePairAddress,
-      "TAK-TOE_Pair": takToePairAddress,
+      Reputation: reputationAddress,
+      "TIK-TAK_LP": tikTakPair.lpToken,
+      "TIK-TOE_LP": tikToePair.lpToken,
+      "TAK-TOE_LP": takToePair.lpToken,
     },
     tokens: TOKENS,
     explorer: "https://amoy.polygonscan.com/",
@@ -101,11 +126,13 @@ async function main() {
   console.log("\n🎉 Deployment completed successfully!");
   console.log("📋 Summary:");
   console.log(`   DEX Contract: ${dexAddress}`);
-  console.log(`   TIK-TAK Pair: ${tikTakPairAddress}`);
-  console.log(`   TIK-TOE Pair: ${tikToePairAddress}`);
-  console.log(`   TAK-TOE Pair: ${takToePairAddress}`);
+  console.log(`   Reputation: ${reputationAddress}`);
+  console.log(`   TIK-TAK LP: ${tikTakPair.lpToken}`);
+  console.log(`   TIK-TOE LP: ${tikToePair.lpToken}`);
+  console.log(`   TAK-TOE LP: ${takToePair.lpToken}`);
   console.log("\n🌐 View on explorer:");
   console.log(`   https://amoy.polygonscan.com/address/${dexAddress}`);
+  console.log(`   https://amoy.polygonscan.com/address/${reputationAddress}`);
 }
 
 main()
