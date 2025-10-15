@@ -1,348 +1,233 @@
-# 🚀 TikTakDex - Advanced DeFi Platform with Reputation System
+# 🚀 DEX x COPILOT - Reputation-Based Decentralized Exchange
 
-[![Next.js](https://img.shields.io/badge/Next.js-15.5.3-black?style=flat-square&logo=next.js)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19.1.0-blue?style=flat-square&logo=react)](https://reactjs.org/)
-[![Solidity](https://img.shields.io/badge/Solidity-^0.8.20-363636?style=flat-square&logo=solidity)](https://soliditylang.org/)
-[![Polygon](https://img.shields.io/badge/Polygon-Amoy-8247E5?style=flat-square&logo=polygon)](https://polygon.technology/)
-[![Hardhat](https://img.shields.io/badge/Hardhat-^2.26.3-yellow?style=flat-square&logo=hardhat)](https://hardhat.org/)
+A revolutionary decentralized exchange (DEX) that integrates AI-powered copilot assistance with a unique reputation system and gamified trading experience through TikTakToe mechanics.
 
-> **A comprehensive Web3 DeFi platform featuring reputation-based dynamic fees, AI-powered trading assistance, and a complete token ecosystem on Polygon Amoy testnet.**
+## 🌟 Features
 
-## 🌟 **Overview**
+### 🤖 AI-Powered Trading Assistant
+- **Intelligent Swap Recommendations**: AI analyzes market conditions and suggests optimal trading strategies
+- **Portfolio Analytics**: Real-time insights into your trading performance and portfolio health
+- **Risk Assessment**: Advanced risk analysis for informed decision making
+- **Natural Language Interface**: Chat with the AI assistant for trading guidance
 
-TikTakDex is a next-generation decentralized exchange (DEX) that combines traditional AMM mechanics with innovative reputation-based fee structures. Users earn reputation points through trading activities and receive automatic fee discounts based on their tier level.
+### 🏆 Reputation System
+- **Trust-Based Trading**: Users build reputation through successful trades and community interactions
+- **Reputation Badges**: Visual indicators of user trustworthiness and trading experience
+- **Incentivized Behavior**: Higher reputation unlocks better trading conditions and features
+- **Community Governance**: Reputation holders participate in protocol decisions
 
-### **🎯 Key Features**
+### 🎮 Gamified Trading Experience
+- **TikTakToe Integration**: Unique gamification mechanics that make trading engaging
+- **Achievement System**: Unlock rewards and special features through trading milestones
+- **Social Trading**: Connect with other traders and share strategies
+- **Leaderboards**: Compete with the community for top trader status
 
-- **🔄 Dynamic Fee System**: Reputation-based fees from 0.05% to 0.30%
-- **🏆 Tier System**: Bronze, Silver, Gold, and Diamond tiers with visual badges
-- **📊 Live Leaderboard**: Real-time reputation rankings with achievements
-- **🤖 AI Assistant**: Gemini-powered trading insights and portfolio analysis
-- **🪙 Token Factory**: Create custom ERC20 tokens with reputation rewards
-- **💧 Liquidity Management**: Add/remove liquidity with LP token rewards
-- **📈 Analytics Dashboard**: Comprehensive pool statistics and trading data
-- **🎨 Modern UI**: Neobrutalist design with smooth animations
+### 💱 Advanced DEX Features
+- **Multi-Token Support**: Trade any ERC-20 token with ease
+- **Liquidity Pools**: Provide liquidity and earn rewards
+- **Slippage Protection**: Advanced algorithms minimize trading slippage
+- **MEV Protection**: Built-in protection against Maximal Extractable Value attacks
 
----
+## 🛠️ Technology Stack
 
-## 🏗️ **Architecture**
+### Smart Contracts
+- **Solidity**: Ethereum smart contracts for core DEX functionality
+- **OpenZeppelin**: Battle-tested security libraries
+- **Hardhat**: Development and testing framework
+- **Polygon**: Layer 2 scaling for low-cost transactions
 
-### **Frontend Stack**
-- **Framework**: Next.js 15 + React 19 + TypeScript
-- **Styling**: Tailwind CSS with custom neobrutalist theme
-- **Web3**: Ethers.js v6 with MetaMask integration
-- **Animations**: Framer Motion for smooth transitions
-- **AI**: Google Gemini API for intelligent assistance
-- **Data**: Alchemy API + CoinGecko for real-time data
+### Frontend
+- **Next.js 14**: React framework with App Router
+- **TypeScript**: Type-safe development
+- **Tailwind CSS**: Utility-first styling
+- **Web3 Integration**: Seamless blockchain connectivity
 
-### **Smart Contracts**
-- **Network**: Polygon Amoy Testnet (Chain ID: 80002)
-- **Language**: Solidity ^0.8.20 with OpenZeppelin libraries
-- **Framework**: Hardhat for development and deployment
-- **Security**: Comprehensive test suite with edge case coverage
+### AI & Analytics
+- **Machine Learning**: Advanced trading algorithms
+- **Real-time Data**: Live market data integration
+- **Predictive Analytics**: Market trend analysis
+- **Natural Language Processing**: AI chat interface
 
----
+## 🚀 Quick Start
 
-## 🎖️ **Reputation System**
-
-### **Scoring Mechanism**
-| Action | Points | Description |
-|--------|--------|-------------|
-| 🔄 **Swap** | +1 | Each successful token swap |
-| 💧 **Add Liquidity** | +2 | Providing liquidity to pools |
-| 🪙 **Create Token** | +5 | Deploying new ERC20 tokens |
-
-### **Tier Structure**
-| Tier | Points | Fee Rate | Badge |
-|------|--------|----------|-------|
-| 🥉 **Bronze** | 10-49 | 0.30% | Default tier |
-| 🥈 **Silver** | 50-99 | 0.20% | 33% fee reduction |
-| 🥇 **Gold** | 100-499 | 0.10% | 67% fee reduction |
-| 💎 **Diamond** | 500+ | 0.05% | 83% fee reduction |
-
----
-
-## 🚀 **Quick Start**
-
-### **Prerequisites**
+### Prerequisites
 - Node.js 18+ 
-- MetaMask browser extension
-- Polygon Amoy testnet MATIC ([Get from faucet](https://faucet.polygon.technology/))
+- npm or yarn
+- Git
+- MetaMask or compatible wallet
 
-### **Installation**
+### Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/ayushsaklani-min/web3_copilot.git
-cd web3_copilot
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/ayushsaklani-min/copilotXDeX.git
+   cd copilotXDeX
+   ```
 
-# Install dependencies
-npm install
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-# Set up environment variables
-cp .env.example .env
-# Add your API keys to .env file
+3. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+4. **Deploy smart contracts**
+   ```bash
+   npx hardhat compile
+   npx hardhat run scripts/deploy.js --network polygon-amoy
+   ```
+
+5. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+
+6. **Open your browser**
+   Navigate to `http://localhost:3000`
+
+## 📁 Project Structure
+
+```
+copilotXDeX/
+├── contracts/                 # Smart contracts
+│   ├── TikTakDex.sol        # Main DEX contract
+│   ├── Reputation.sol       # Reputation system
+│   ├── TokenFactory.sol     # Token creation factory
+│   └── TikTakLP.sol        # Liquidity pool contract
+├── src/
+│   ├── app/                 # Next.js app directory
+│   │   ├── components/     # React components
+│   │   ├── dex/           # DEX-specific pages
+│   │   └── api/           # API routes
+│   ├── hooks/             # Custom React hooks
+│   ├── constants/         # Configuration constants
+│   └── config/           # App configuration
+├── scripts/               # Deployment and utility scripts
+├── test/                 # Test files
+└── public/              # Static assets
 ```
 
-### **Environment Setup**
+## 🔧 Smart Contracts
 
-Create a `.env` file in the root directory:
+### TikTakDex.sol
+The main DEX contract handling:
+- Token swaps with AMM algorithm
+- Liquidity pool management
+- Fee distribution
+- Slippage protection
 
-```env
-# Blockchain
-RPC_URL=https://rpc-amoy.polygon.technology/
-PRIVATE_KEY=your_private_key_here
+### Reputation.sol
+Reputation system features:
+- User reputation tracking
+- Badge assignment
+- Reputation-based trading benefits
+- Governance participation
 
-# APIs (Optional)
-NEXT_PUBLIC_ALCHEMY_API_KEY=your_alchemy_key
-NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_key
-```
+### TokenFactory.sol
+Token creation and management:
+- ERC-20 token deployment
+- Token metadata management
+- Factory pattern implementation
 
-### **Development**
+## 🎯 Key Features Deep Dive
 
-```bash
-# Start development server
-npm run dev
+### AI Trading Assistant
+The AI copilot provides:
+- **Market Analysis**: Real-time market sentiment and trend analysis
+- **Trade Optimization**: Suggests optimal trade sizes and timing
+- **Risk Management**: Identifies potential risks and suggests mitigation
+- **Educational Content**: Explains complex DeFi concepts in simple terms
 
-# Open http://localhost:3000
-```
+### Reputation System
+Users earn reputation through:
+- **Successful Trades**: Higher success rate increases reputation
+- **Community Contributions**: Helping other users and providing liquidity
+- **Long-term Holding**: Consistent participation in the ecosystem
+- **Governance Participation**: Voting on protocol upgrades
 
-### **Smart Contract Deployment**
+### Gamification Elements
+- **TikTakToe Mechanics**: Strategic trading decisions with game-like elements
+- **Achievement Unlocks**: Special features unlocked through trading milestones
+- **Social Features**: Connect with friends and share trading strategies
+- **Competitive Elements**: Leaderboards and trading competitions
 
-```bash
-# Compile contracts
-npm run compile
+## 🔒 Security Features
 
-# Deploy to Polygon Amoy
-npm run deploy:amoy
+- **Audited Smart Contracts**: Professional security audits
+- **Multi-signature Wallets**: Enhanced security for protocol upgrades
+- **Emergency Pause**: Circuit breakers for unusual market conditions
+- **Access Controls**: Role-based permissions for different functions
+- **Upgradeable Contracts**: Secure upgrade mechanisms
 
-# Set reputation contract
-npm run set:reputation
-```
+## 🌐 Supported Networks
 
----
+- **Polygon Mainnet**: Production deployment
+- **Polygon Amoy**: Testnet for development
+- **Ethereum**: Future mainnet deployment
+- **Arbitrum**: Layer 2 scaling support
 
-## 📱 **User Interface**
+## 📊 Analytics & Monitoring
 
-### **Main Dashboard** (`/`)
-- **Portfolio Overview**: Real-time token balances with USD values
-- **AI Assistant**: Contextual DeFi guidance and portfolio insights
-- **Wallet Management**: One-click connection with auto network switching
+- **Trading Analytics**: Comprehensive trading performance metrics
+- **Portfolio Tracking**: Real-time portfolio value and P&L
+- **Market Data**: Live price feeds and market indicators
+- **User Insights**: Personalized trading recommendations
 
-### **DEX Suite** (`/dex`)
-- **🔄 Swap**: Token trading with real-time quotes and fee display
-- **💧 Liquidity**: Add/remove liquidity with LP token management
-- **📊 Analytics**: Pool statistics, TVL, and trading volume charts
-- **🤖 AI Assistant**: Trading advice and market analysis
+## 🤝 Contributing
 
-### **Token Management** (`/dex/tokens`)
-- **🪙 Create Tokens**: Deploy custom ERC20 tokens with metadata
-- **🏆 Achievements**: Live leaderboard with tier progression
-- **📈 Portfolio**: View created tokens and reputation history
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
----
+### Development Setup
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
 
-## 🔧 **Smart Contracts**
-
-### **TikTakDex.sol** - Main AMM Contract
-```solidity
-// Core AMM functionality
-- Uniswap V2-style automated market maker
-- Multi-pair support (TIK-TAK, TIK-TOE, TAK-TOE)
-- Dynamic fee calculation based on reputation
-- LP token minting and burning
-- Reserve management with K-value tracking
-
-// Reputation integration
-- getUserFeeRate(address): Returns dynamic fee (5-30 basis points)
-- FeeAdjusted event: Emitted on each swap with fee details
-- Reputation contract integration via IReputation interface
-```
-
-### **TokenFactory.sol** - Token Creation
-```solidity
-- LaunchToken: Custom ERC20 with initial supply
-- TokenFactory: Deploy new tokens with metadata
-- Event emission for tracking and reputation rewards
-```
-
-### **TikTakLP.sol** - Liquidity Provider Tokens
-```solidity
-- Standard ERC20 LP tokens for each trading pair
-- Mint/burn functionality for liquidity management
-- Pair-specific naming and metadata
-```
-
----
-
-## 🧪 **Testing**
-
-### **Run Tests**
-```bash
-# Run all tests
-npm run test
-
-# Run with coverage
-npm run test:coverage
-
-# Run specific test file
-npx hardhat test test/TikTakDex.test.js
-```
-
-### **Test Coverage**
-- ✅ Pair creation and management
-- ✅ Liquidity addition/removal
-- ✅ Token swapping mechanics
-- ✅ Fee distribution and reputation integration
-- ✅ Error handling and edge cases
-- ✅ Gas optimization validation
-
----
-
-## 📊 **Contract Addresses** (Polygon Amoy)
-
-| Contract | Address |
-|----------|---------|
-| **TikTakDex** | `0x3Db5A1C4bE6C21ceCaf3E74611Bd55F41651f0Ba` |
-| **TIK Token** | `0xf0dc4aa8063810B4116091371a74D55856c9Fa87` |
-| **TAK Token** | `0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3` |
-| **TOE Token** | `0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc` |
-| **Reputation** | `0x07535D0f538689918901e53bC8ab25bb7ee66237` |
-| **TokenFactory** | `0x68F18B79F942B1e2Ad4Df83b8b5D3822696Cdf8A` |
-
----
-
-## 🎨 **Design System**
-
-### **Visual Theme**
-- **Background**: Dark gradient (gray-900 → blue-900 → purple-900)
-- **Accents**: Cyan/blue gradients for primary actions
-- **Typography**: Geist Sans + Geist Mono fonts
-- **Components**: Neon-style cards with backdrop blur effects
-
-### **Responsive Design**
-- Mobile-first approach with adaptive layouts
-- Breakpoints: sm/md/lg/xl/2xl
-- Touch-friendly interface for mobile trading
-
----
-
-## 🔌 **API Integration**
-
-### **External Services**
-- **Alchemy**: Token balance fetching and blockchain data
-- **CoinGecko**: Real-time price data for USD conversions
-- **Google Gemini**: AI-powered trading assistance
-- **Polygon Amoy**: Blockchain interactions and transactions
-
-### **Internal APIs**
-- **Simulation**: `/api/simulate` for transaction previews
-- **Contract Config**: Auto-generated from deployment artifacts
-
----
-
-## 🚀 **Deployment**
-
-### **Frontend Deployment**
-```bash
-# Build for production
-npm run build
-
-# Start production server
-npm run start
-
-# Deploy to Vercel/Netlify
-npm run deploy
-```
-
-### **Smart Contract Deployment**
-```bash
-# Deploy to Polygon Amoy
-npm run deploy:amoy
-
-# Verify contracts on explorer
-npx hardhat verify --network amoy <CONTRACT_ADDRESS>
-```
-
----
-
-## 📈 **Performance & Security**
-
-### **Gas Optimization**
-- Efficient contract design with minimal storage operations
-- Optimized function calls and batch operations
-- Smart contract gas usage analysis and optimization
-
-### **Security Features**
-- **Safe Math**: Built-in overflow/underflow protection
-- **Access Control**: Owner-only functions properly protected
-- **Input Validation**: Comprehensive parameter validation
-- **Event Logging**: Full transaction traceability
-- **Test Coverage**: Comprehensive test suite with edge cases
-
----
-
-## 🤝 **Contributing**
-
-We welcome contributions! Please follow these steps:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-### **Development Guidelines**
-- Follow TypeScript best practices
-- Write comprehensive tests for new features
-- Update documentation for API changes
-- Ensure responsive design for all UI components
-
----
-
-## 📄 **License**
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 🆘 Support
+
+- **Documentation**: [Full Documentation](docs/)
+- **Discord**: [Join our community](https://discord.gg/copilotxdex)
+- **Twitter**: [@CopilotXDEX](https://twitter.com/copilotxdex)
+- **Email**: support@copilotxdex.com
+
+## 🗺️ Roadmap
+
+### Phase 1: Core DEX (✅ Complete)
+- Basic swap functionality
+- Liquidity pools
+- Reputation system
+- AI assistant integration
+
+### Phase 2: Advanced Features (🚧 In Progress)
+- Advanced trading strategies
+- Cross-chain swaps
+- Mobile app
+- Enhanced AI capabilities
+
+### Phase 3: Ecosystem (📋 Planned)
+- Governance token
+- Staking rewards
+- NFT integration
+- Institutional features
+
+## 🙏 Acknowledgments
+
+- OpenZeppelin for secure smart contract libraries
+- Next.js team for the amazing React framework
+- Polygon for Layer 2 scaling solutions
+- The DeFi community for inspiration and support
+
 ---
 
-## 🙏 **Acknowledgments**
+**Built with ❤️ by the CopilotXDEX Team**
 
-- **Uniswap V2** - AMM design inspiration and mechanics
-- **OpenZeppelin** - Secure contract libraries and standards
-- **Hardhat** - Development framework and testing tools
-- **Next.js** - React framework for modern web applications
-- **Tailwind CSS** - Utility-first CSS framework
-- **Polygon** - Scalable blockchain infrastructure
-
----
-
-## 📞 **Support & Community**
-
-- **Documentation**: [GitHub Wiki](https://github.com/ayushsaklani-min/web3_copilot/wiki)
-- **Issues**: [GitHub Issues](https://github.com/ayushsaklani-min/web3_copilot/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/ayushsaklani-min/web3_copilot/discussions)
-
----
-
-## 🌟 **Star History**
-
-[![Star History Chart](https://api.star-history.com/svg?repos=ayushsaklani-min/web3_copilot&type=Date)](https://star-history.com/#ayushsaklani-min/web3_copilot&Date)
-
----
-
-**Built with ❤️ for the DeFi community**
-
-*TikTakDex - Your gateway to reputation-driven decentralized trading on Polygon Amoy*
-
----
-
-<div align="center">
-
-**⭐ Star this repo if you found it helpful!**
-
-[![GitHub stars](https://img.shields.io/github/stars/ayushsaklani-min/web3_copilot?style=social)](https://github.com/ayushsaklani-min/web3_copilot/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/ayushsaklani-min/web3_copilot?style=social)](https://github.com/ayushsaklani-min/web3_copilot/network/members)
-[![GitHub watchers](https://img.shields.io/github/watchers/ayushsaklani-min/web3_copilot?style=social)](https://github.com/ayushsaklani-min/web3_copilot/watchers)
-
-</div>
+*Revolutionizing DeFi through AI-powered trading and gamified experiences*
