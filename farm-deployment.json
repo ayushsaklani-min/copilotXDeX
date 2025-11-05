@@ -1,0 +1,26 @@
+{
+  "farm": "0xdaf321167e32E46b5C256d07Bd1a37eeb951597F",
+  "rewardToken": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
+  "rewardPerSecond": "100000000000000000",
+  "pools": [
+    {
+      "pid": 0,
+      "name": "TIK-TAK",
+      "lpToken": "0x235b7Cb52BbF354f7dE866a7C4da7Ab9f97E1417",
+      "allocPoint": 75
+    },
+    {
+      "pid": 1,
+      "name": "TIK-TOE",
+      "lpToken": "0x372de4a620eB67E6D55964308faB77A4639aA8CB",
+      "allocPoint": 100
+    },
+    {
+      "pid": 2,
+      "name": "TAK-TOE",
+      "lpToken": "0xADdCeD0666A295FaaeAB25649b926d94E4b63F56",
+      "allocPoint": 50
+    }
+  ],
+  "timestamp": "2025-10-27T11:49:51.879Z"
+}

@@ -1,30 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import PortfolioOverview from './PortfolioOverview';
 import AIAssistant from './AIAssistant';
+import { useReputation } from '../../hooks/useReputation';
+
+type EthereumProvider = ethers.Eip1193Provider & {
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+  removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
 
 // Narrow and return an EIP-1193 external provider for ethers.js v6
-const getExternalProvider = (): ethers.Eip1193Provider => {
+const getExternalProvider = (): EthereumProvider => {
   const maybeWindow = window as unknown as { ethereum?: unknown };
   if (!maybeWindow.ethereum || typeof maybeWindow.ethereum !== 'object') {
     throw new Error('No injected Ethereum provider found');
   }
-  return maybeWindow.ethereum as ethers.Eip1193Provider;
+  return maybeWindow.ethereum as EthereumProvider;
 };
 
 const AMOY_CHAIN_ID = '0x13882';
-const ALCHEMY_API_KEY_AMOY = 'cWLAkUnYYRdZ041Gea_01';
-const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyDl9pqcEoAg1pNUyckWPurzyxiTLhEWt8w';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const AMOY_RPC_URL = process.env.NEXT_PUBLIC_AMOY_RPC_URL ?? '';
+const AMOY_FALLBACK_RPC_URL = process.env.NEXT_PUBLIC_AMOY_FALLBACK_RPC_URL ?? 'https://rpc-amoy.polygon.technology/';
+const GEMINI_API_URL = '/api/copilot';
 
 // Network configuration for Polygon Amoy only
 const NETWORK = {
     chainIdDec: 80002,
     chainIdHex: AMOY_CHAIN_ID,
     name: 'Polygon Amoy',
-    alchemyUrl: `https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY_AMOY}`,
+    rpcUrl: AMOY_RPC_URL || null,
     nativeSymbol: 'MATIC',
     wrappedSymbol: 'WMATIC',
     routerAddress: process.env.NEXT_PUBLIC_AMOY_ROUTER_ADDRESS || '0x1b02da8cb0d097eb8d57a175b88c7d8b47997506',
@@ -58,38 +65,250 @@ export default function Web3Copilot() {
   const [aiResponse, setAiResponse] = useState<string>('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
+  const { score: reputationScore } = useReputation(signer, address ?? undefined);
+
+  const fetchBalances = useCallback(
+    async (activeSigner: ethers.JsonRpcSigner, activeAddress: string) => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Fetch native MATIC balance with retry logic and fallback RPC
+        let providerForBalances = activeSigner.provider;
+        if (!providerForBalances) {
+          // Try primary RPC first, then fallback
+          const primaryRpc = NETWORK.rpcUrl ? new ethers.JsonRpcProvider(NETWORK.rpcUrl) : null;
+          const fallbackRpc = new ethers.JsonRpcProvider(AMOY_FALLBACK_RPC_URL);
+          providerForBalances = primaryRpc || fallbackRpc;
+        }
+        
+        if (!providerForBalances) {
+          throw new Error('No provider available to fetch balances');
+        }
+
+        let nativeBalanceWei;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (retryCount < maxRetries) {
+          try {
+            nativeBalanceWei = await providerForBalances.getBalance(activeAddress);
+            break; // Success, exit retry loop
+          } catch (balanceError: any) {
+            retryCount++;
+            console.warn(`Balance fetch attempt ${retryCount} failed:`, balanceError);
+            
+            if (balanceError.message?.includes('state histories haven\'t been fully indexed yet') || 
+                balanceError.message?.includes('Internal JSON-RPC error')) {
+              
+              // Try switching to fallback RPC on first retry
+              if (retryCount === 1 && providerForBalances === activeSigner.provider) {
+                console.log('Switching to fallback RPC...');
+                providerForBalances = new ethers.JsonRpcProvider(AMOY_FALLBACK_RPC_URL);
+                continue;
+              }
+              
+              if (retryCount < maxRetries) {
+                console.log(`Retrying balance fetch in ${retryCount * 1000}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+                continue;
+              } else {
+                // After max retries, show a user-friendly message
+                console.warn('Balance fetch failed after retries, using fallback');
+                nativeBalanceWei = ethers.parseEther('0'); // Fallback to 0 balance
+                break;
+              }
+            } else {
+              throw balanceError; // Re-throw non-indexing errors
+            }
+          }
+        }
+
+        const nativeBalance = parseFloat(ethers.formatEther(nativeBalanceWei)).toFixed(4);
+
+        // Fetch token balances using JSON RPC
+        const tokenBalances: TokenBalance[] = [
+          {
+            symbol: NETWORK.nativeSymbol,
+            balance: nativeBalance,
+            usdValue: 0,
+            contractAddress: '',
+            decimals: 18,
+            coingeckoId: 'matic-network'
+          }
+        ];
+
+        const provider = providerForBalances;
+
+        const erc20Abi = ['function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)', 'function symbol() view returns (string)'];
+
+        for (const tokenConfig of Object.values(NETWORK.tokens)) {
+          try {
+            const tokenContract = new ethers.Contract(tokenConfig.address, erc20Abi, provider);
+            
+            // Add retry logic for token balance fetching
+            let rawBalance, decimals, symbol;
+            let tokenRetryCount = 0;
+            const maxTokenRetries = 2;
+
+            while (tokenRetryCount < maxTokenRetries) {
+              try {
+                [rawBalance, decimals, symbol] = await Promise.all([
+                  tokenContract.balanceOf(activeAddress),
+                  tokenContract.decimals(),
+                  tokenContract.symbol().catch(() => tokenConfig.address.slice(0, 6)),
+                ]);
+                break; // Success, exit retry loop
+              } catch (tokenError: any) {
+                tokenRetryCount++;
+                console.warn(`Token ${tokenConfig.address} fetch attempt ${tokenRetryCount} failed:`, tokenError);
+                
+                if (tokenError.message?.includes('state histories haven\'t been fully indexed yet') || 
+                    tokenError.message?.includes('Internal JSON-RPC error') ||
+                    tokenError.message?.includes('could not decode result data')) {
+                  if (tokenRetryCount < maxTokenRetries) {
+                    console.log(`Retrying token fetch in ${tokenRetryCount * 500}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, tokenRetryCount * 500));
+                    continue;
+                  } else {
+                    // After max retries, skip this token
+                    console.warn(`Skipping token ${tokenConfig.address} after retries`);
+                    throw tokenError;
+                  }
+                } else {
+                  throw tokenError; // Re-throw non-indexing errors
+                }
+              }
+            }
+
+            const formattedBalance = ethers.formatUnits(rawBalance, decimals);
+            tokenBalances.push({
+              symbol,
+              balance: parseFloat(formattedBalance).toFixed(4),
+              usdValue: 0,
+              contractAddress: tokenConfig.address,
+              decimals,
+              coingeckoId: tokenConfig.coingeckoId,
+            });
+          } catch (tokenError) {
+            console.warn(`Skipping token ${tokenConfig.address}:`, tokenError);
+          }
+        }
+
+        const coingeckoIds = tokenBalances.map((t) => t.coingeckoId).join(',');
+        if (coingeckoIds) {
+          const priceResponse = await fetch(
+            `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds}&vs_currencies=usd`
+          );
+          if (priceResponse.ok) {
+            const prices = await priceResponse.json();
+            tokenBalances.forEach((token) => {
+              const price = prices[token.coingeckoId]?.usd || 0;
+              const parsedBalance = parseFloat(token.balance) || 0;
+              token.usdValue = parsedBalance * price;
+            });
+          }
+        }
+
+        setBalances(tokenBalances);
+      } catch (fetchError: any) {
+        console.error('Error fetching balances:', fetchError);
+        
+        // Provide more specific error messages
+        if (fetchError.message?.includes('state histories haven\'t been fully indexed yet')) {
+          setError('Blockchain is still syncing. Please wait a moment and try refreshing.');
+        } else if (fetchError.message?.includes('Internal JSON-RPC error')) {
+          setError('Network temporarily unavailable. Please try again in a moment.');
+        } else if (fetchError.message?.includes('No provider available')) {
+          setError('Unable to connect to blockchain. Please check your network connection.');
+        } else {
+          setError('Failed to fetch balances. Please try refreshing.');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const handleAiQuery = async (query: string) => {
+    if (!query.trim()) return;
+
+    setIsAiLoading(true);
+    setAiResponse('');
+
+    try {
+      const contextPayload = {
+        walletAddress: address ?? undefined,
+        balances: balances.reduce((acc, token) => {
+          acc[token.symbol] = parseFloat(token.balance);
+          return acc;
+        }, {} as Record<string, number>),
+        reputationScore,
+      };
+
+      const response = await fetch(GEMINI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          context: contextPayload,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Copilot request failed');
+      }
+
+      const data = await response.json();
+      const aiText = data.response || data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not process your request.';
+      setAiResponse(aiText);
+    } catch (error) {
+      console.error('Error calling AI:', error);
+      setAiResponse('Sorry, there was an error processing your request.');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   // Initialize connection on mount
   useEffect(() => {
     const initConnection = async () => {
-    try {
-      const ext = getExternalProvider();
-      const provider = new ethers.BrowserProvider(ext);
-          const accounts = await provider.listAccounts();
-          
-          if (accounts.length > 0) {
-          const signer = await provider.getSigner();
-          const address = await signer.getAddress();
-          const network = await provider.getNetwork();
-          
-          setSigner(signer);
-          setAddress(address);
+      try {
+        const ext = getExternalProvider();
+        const provider = new ethers.BrowserProvider(ext);
+        const accounts = await provider.listAccounts();
+
+        if (accounts.length > 0) {
+          const activeSigner = await provider.getSigner();
+          const activeAddress = await activeSigner.getAddress();
+          const activeNetwork = await provider.getNetwork();
+
+          setSigner(activeSigner);
+          setAddress(activeAddress);
           setIsConnected(true);
-          setIsCorrectNetwork(Number(network.chainId) === NETWORK.chainIdDec);
-          
-          // Fetch balances immediately
-          await fetchBalances();
+          const correctNetwork = Number(activeNetwork.chainId) === NETWORK.chainIdDec;
+          setIsCorrectNetwork(correctNetwork);
+
+          if (correctNetwork) {
+            await fetchBalances(activeSigner, activeAddress);
           }
-        } catch (error) {
+        }
+      } catch (error) {
         console.error('Error initializing connection:', error);
       }
     };
 
-    initConnection();
-  }, []);
+    void initConnection();
+  }, [fetchBalances]);
 
   // Listen for account changes
   useEffect(() => {
-    const handleAccountsChanged = (accounts: string[]) => {
+    const handleAccountsChanged = async (accountsRaw: unknown) => {
+      const accounts = Array.isArray(accountsRaw) ? (accountsRaw as string[]) : [];
       if (accounts.length === 0) {
         // User disconnected
           setSigner(null);
@@ -102,24 +321,27 @@ export default function Web3Copilot() {
         const newAddress = accounts[0];
         setAddress(newAddress);
         if (signer) {
-          fetchBalances();
+          await fetchBalances(signer, newAddress);
         }
       }
     };
 
-    const handleChainChanged = (chainId: string) => {
-      const isCorrect = parseInt(chainId, 16) === NETWORK.chainIdDec;
+    const handleChainChanged = (chainIdRaw: unknown) => {
+      if (typeof chainIdRaw !== 'string') {
+        return;
+      }
+      const isCorrect = parseInt(chainIdRaw, 16) === NETWORK.chainIdDec;
       setIsCorrectNetwork(isCorrect);
-      if (isCorrect && signer) {
-        fetchBalances();
+      if (isCorrect && signer && address) {
+        void fetchBalances(signer, address);
       }
     };
 
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      const ethereum = (window as any).ethereum as {
-        on: (event: string, callback: (...args: any[]) => void) => void;
-        removeListener: (event: string, callback: (...args: any[]) => void) => void;
-      };
+    if (typeof window !== 'undefined') {
+      const ethereum = (window as unknown as { ethereum?: EthereumProvider }).ethereum;
+      if (!ethereum) {
+        return;
+      }
       ethereum.on('accountsChanged', handleAccountsChanged);
       ethereum.on('chainChanged', handleChainChanged);
 
@@ -128,31 +350,31 @@ export default function Web3Copilot() {
         ethereum.removeListener('chainChanged', handleChainChanged);
       };
     }
-  }, [signer]);
+  }, [signer, address, fetchBalances]);
 
   const switchToAmoyNetwork = async () => {
     try {
-      await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
+      await getExternalProvider().request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: NETWORK.chainIdHex }]
       });
       
-      const newProvider = new ethers.BrowserProvider(getExternalProvider());
-      const newSigner = await newProvider.getSigner();
-      const newAddress = await newSigner.getAddress();
+      const refreshedProvider = new ethers.BrowserProvider(getExternalProvider());
+      const refreshedSigner = await refreshedProvider.getSigner();
+      const refreshedAddress = await refreshedSigner.getAddress();
       
-      setSigner(newSigner);
-      setAddress(newAddress);
+      setSigner(refreshedSigner);
+      setAddress(refreshedAddress);
       setIsConnected(true);
       setIsCorrectNetwork(true);
       
-      await fetchBalances();
+      await fetchBalances(refreshedSigner, refreshedAddress);
     } catch (error: unknown) {
       const err = error as { code?: number; message?: string };
       if (err.code === 4902) {
         // Network not added, try to add it
         try {
-          await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
+          await getExternalProvider().request({
             method: 'wallet_addEthereumChain',
             params: [{
               chainId: NETWORK.chainIdHex,
@@ -167,16 +389,16 @@ export default function Web3Copilot() {
             }]
           });
           
-          const newProvider = new ethers.BrowserProvider(getExternalProvider());
-          const newSigner = await newProvider.getSigner();
-          const newAddress = await newSigner.getAddress();
+          const refreshedProvider = new ethers.BrowserProvider(getExternalProvider());
+          const refreshedSigner = await refreshedProvider.getSigner();
+          const refreshedAddress = await refreshedSigner.getAddress();
           
-          setSigner(newSigner);
-          setAddress(newAddress);
+          setSigner(refreshedSigner);
+          setAddress(refreshedAddress);
           setIsConnected(true);
           setIsCorrectNetwork(true);
           
-          await fetchBalances();
+          await fetchBalances(refreshedSigner, refreshedAddress);
         } catch (addError) {
           console.error('Error adding network:', addError);
           setError('Failed to add Polygon Amoy network to MetaMask');
@@ -199,7 +421,7 @@ export default function Web3Copilot() {
       setIsLoading(true);
       
       const web3Provider = new ethers.BrowserProvider(getExternalProvider());
-      const accounts = await web3Provider.send("eth_requestAccounts", []);
+      const accounts = await web3Provider.send('eth_requestAccounts', []);
       
       if (accounts.length > 0) {
         const signer = await web3Provider.getSigner();
@@ -214,39 +436,39 @@ export default function Web3Copilot() {
         setIsCorrectNetwork(isCorrectNetwork);
         
         if (isCorrectNetwork) {
-          await fetchBalances();
+          await fetchBalances(signer, address);
         } else {
           // Try to switch to the correct network
-        try {
-          await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
-            method: 'wallet_switchEthereumChain',
+          try {
+            await getExternalProvider().request({
+              method: 'wallet_switchEthereumChain',
               params: [{ chainId: NETWORK.chainIdHex }]
             });
-            
+
             setIsCorrectNetwork(true);
-            await fetchBalances();
+            await fetchBalances(signer, address);
           } catch (switchError: unknown) {
             const switchErr = switchError as { code?: number; message?: string };
             if (switchErr.code === 4902) {
               // Network not added, try to add it
-            try {
-              await (getExternalProvider() as unknown as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
-                method: 'wallet_addEthereumChain',
-                params: [{
+              try {
+                await getExternalProvider().request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{
                     chainId: NETWORK.chainIdHex,
                     chainName: NETWORK.name,
                     rpcUrls: ['https://rpc-amoy.polygon.technology/'],
-                  nativeCurrency: {
+                    nativeCurrency: {
                       name: 'MATIC',
                       symbol: 'MATIC',
-                      decimals: 18,
+                      decimals: 18
                     },
                     blockExplorerUrls: ['https://amoy.polygonscan.com/']
-                }]
-              });
-                
+                  }]
+                });
+
                 setIsCorrectNetwork(true);
-                await fetchBalances();
+                await fetchBalances(signer, address);
               } catch {
                 setError('Please add Polygon Amoy network to MetaMask');
               }
@@ -256,149 +478,11 @@ export default function Web3Copilot() {
           }
         }
       }
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
+    } catch (connectError) {
+      console.error('Error connecting wallet:', connectError);
       setError('Failed to connect wallet');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const fetchBalances = async () => {
-    if (!signer || !address) return;
-
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // Fetch native MATIC balance
-      const nativeBalanceWei = await signer.provider!.getBalance(address);
-      const nativeBalance = parseFloat(ethers.formatEther(nativeBalanceWei)).toFixed(4);
-
-      // Fetch token balances using Alchemy
-      const tokenBalances: TokenBalance[] = [
-        {
-          symbol: NETWORK.nativeSymbol,
-          balance: nativeBalance,
-          usdValue: 0, // Will be calculated below
-          contractAddress: '',
-          decimals: 18,
-          coingeckoId: 'matic-network'
-        }
-      ];
-
-      // Get token balances from Alchemy
-      const tokenAddresses = Object.values(NETWORK.tokens).map(token => token.address);
-      
-      const response = await fetch(NETWORK.alchemyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 1,
-          jsonrpc: '2.0',
-          method: 'alchemy_getTokenBalances',
-          params: [address, tokenAddresses]
-        })
-      });
-
-      const data = await response.json();
-      
-      if (data.result && data.result.tokenBalances) {
-        // Get token metadata
-        const metadataResponse = await fetch(NETWORK.alchemyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            id: 1,
-          jsonrpc: '2.0',
-          method: 'alchemy_getTokenMetadata',
-            params: [tokenAddresses]
-        })
-      });
-
-        const metadataData = await metadataResponse.json();
-        const tokenMetadata = metadataData.result || [];
-
-        for (const tokenBalance of data.result.tokenBalances) {
-          if (tokenBalance.tokenBalance !== '0x0') {
-            const metadata = tokenMetadata.find((meta: { contractAddress?: string }) => 
-              meta.contractAddress?.toLowerCase() === tokenBalance.contractAddress?.toLowerCase()
-            );
-
-            if (metadata) {
-              const balance = ethers.formatUnits(tokenBalance.tokenBalance, metadata.decimals);
-              const symbol = metadata.symbol || 'UNKNOWN';
-              
-              // Find the token in our configuration
-              const tokenConfig = Object.entries(NETWORK.tokens).find(
-                ([, config]) => config.address.toLowerCase() === tokenBalance.contractAddress?.toLowerCase()
-              );
-
-              if (tokenConfig) {
-                tokenBalances.push({
-                  symbol,
-                  balance: parseFloat(balance).toFixed(4),
-                  usdValue: 0, // Will be calculated below
-                  contractAddress: tokenBalance.contractAddress,
-                  decimals: metadata.decimals,
-                  coingeckoId: tokenConfig[1].coingeckoId
-                });
-              }
-            }
-          }
-        }
-      }
-
-      // Calculate USD values
-      const coingeckoIds = tokenBalances.map(t => t.coingeckoId).join(',');
-      const priceResponse = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds}&vs_currencies=usd`
-      );
-      const prices = await priceResponse.json();
-
-      tokenBalances.forEach(token => {
-        const price = prices[token.coingeckoId]?.usd || 0;
-        token.usdValue = parseFloat(token.balance) * price;
-      });
-
-      setBalances(tokenBalances);
-    } catch (error) {
-      console.error('Error fetching balances:', error);
-      setError('Failed to fetch balances');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAiQuery = async (query: string) => {
-    if (!query.trim()) return;
-
-    setIsAiLoading(true);
-    setAiResponse('');
-
-    try {
-      const response = await fetch(GEMINI_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `You are a Web3 DeFi assistant. The user is connected to Polygon Amoy testnet. Current balances: ${balances.map(b => `${b.balance} ${b.symbol}`).join(', ')}. User query: ${query}`
-            }]
-          }]
-        })
-      });
-
-      const data = await response.json();
-      const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not process your request.';
-      setAiResponse(aiText);
-    } catch (error) {
-      console.error('Error calling AI:', error);
-      setAiResponse('Sorry, there was an error processing your request.');
-    } finally {
-      setIsAiLoading(false);
     }
   };
 
@@ -455,10 +539,19 @@ export default function Web3Copilot() {
       {/* Error Message */}
       {error && (
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-lg">
+          <div className={`px-4 py-3 rounded-lg ${
+            error.includes('syncing') || error.includes('temporarily unavailable') 
+              ? 'bg-yellow-500/20 border border-yellow-500/50 text-yellow-300' 
+              : 'bg-red-500/20 border border-red-500/50 text-red-300'
+          }`}>
             {error}
+            {error.includes('syncing') && (
+              <div className="mt-2 text-sm">
+                💡 <strong>Tip:</strong> This is normal for testnets. The blockchain will sync automatically.
+              </div>
+            )}
           </div>
-            </div>
+        </div>
       )}
 
       {/* Main Content */}
@@ -476,7 +569,7 @@ export default function Web3Copilot() {
                   </summary>
                   <div className="mt-2 pl-4 text-sm text-gray-300">
                     View your token balances and portfolio value
-          </div>
+                  </div>
                 </details>
 
                 <details className="group">
@@ -487,57 +580,67 @@ export default function Web3Copilot() {
                     Get help with DeFi strategies and questions
                   </div>
                 </details>
-                
-                
-                {/* DEX Navigation */}
-                <div className="mt-4 pt-4 border-t border-cyan-500/30">
-                  <a 
-                    href="/dex" 
+
+                <div className="pt-4 border-t border-cyan-500/30 space-y-3">
+                  <a
+                    href="/dex"
                     className="w-full block py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-bold rounded-lg text-center transition-all duration-200 shadow-lg"
                   >
                     🚀 TikTakDex
                   </a>
-                  <p className="text-xs text-gray-400 mt-2 text-center">
-                    Full-featured DEX for TIK-TAK-TOE tokens
+                  <p className="text-xs text-gray-400 text-center">
+                    Full-featured DEX with farming, swaps, and liquidity management.
+                  </p>
+                  
+                  <a
+                    href="/referrals"
+                    className="w-full block py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold rounded-lg text-center transition-all duration-200 shadow-lg"
+                  >
+                    👥 Referrals
+                  </a>
+                  <p className="text-xs text-gray-400 text-center">
+                    Earn XP by referring friends and unlock tier benefits.
                   </p>
                 </div>
               </div>
-              </div>
-            </aside>
+            </div>
+          </aside>
 
             {/* Main content cards */}
           <div className="col-span-12 lg:col-span-9">
-              <div className="neon-card p-6">
-                <h1 className="text-3xl font-bold mb-4 text-cyan-200">Web3 Copilot 🚀</h1>
+            <div className="neon-card p-6">
+              <h1 className="text-3xl font-bold mb-4 text-cyan-200">Web3 Copilot 🚀</h1>
               <p className="text-gray-300 mb-6">
-                Your all-in-one DeFi companion for Polygon Amoy testnet. Manage your portfolio, 
-                swap tokens, and get AI-powered assistance for your DeFi journey.
+                Your all-in-one DeFi companion for Polygon Amoy testnet. Manage your portfolio, swap tokens,
+                farm liquidity, and get AI-powered assistance for your DeFi journey.
               </p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <PortfolioOverview
+                <PortfolioOverview
                   balances={balances.reduce((acc, token) => {
                     acc[token.symbol] = token.balance;
                     return acc;
-                  }, {} as Record<string, string>)} 
+                  }, {} as Record<string, string>)}
                   isLoading={isLoading}
-                  onRefresh={fetchBalances}
+                  onRefresh={() => {
+                    if (signer && address) {
+                      void fetchBalances(signer, address);
+                    }
+                  }}
                   prices={balances.reduce((acc, token) => {
-                    acc[token.symbol] = token.usdValue / parseFloat(token.balance) || 0;
+                    const amount = parseFloat(token.balance);
+                    acc[token.symbol] = amount ? token.usdValue / amount : 0;
                     return acc;
                   }, {} as Record<string, number>)}
                   nativeSymbol={NETWORK.nativeSymbol}
                   tokens={{}}
-            />
+                />
 
-            <AIAssistant
-                  onQuery={handleAiQuery}
-                  response={aiResponse}
-                  isLoading={isAiLoading}
-            />
+                <AIAssistant onQuery={handleAiQuery} response={aiResponse} isLoading={isAiLoading} />
               </div>
-              
             </div>
+
+            {/* Farming section removed - now available in DEX */}
           </div>
         </div>
       </div>

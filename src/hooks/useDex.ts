@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { REPUTATION_ABI, REPUTATION_ADDRESS } from "../constants/reputation";
 
 // Contract configuration (will be loaded from contracts.json)
 interface ContractConfig {
@@ -99,8 +98,6 @@ export const useDex = (
             pairConfig.token1
           );
 
-          const pairInfo = await dexContract.getPair(pairConfig.pairKey);
-          
           pairsData.push({
             name: pairConfig.name,
             token0: pairConfig.token0,
@@ -109,7 +106,7 @@ export const useDex = (
             lpToken: pairConfig.lpToken,
             reserve0: parseFloat(ethers.formatEther(reserve0)),
             reserve1: parseFloat(ethers.formatEther(reserve1)),
-            totalSupply: parseFloat(ethers.formatEther(pairInfo.totalSupply)),
+            totalSupply: parseFloat(ethers.formatEther(reserve0 + reserve1)),
           });
         } catch (err) {
           console.error(`Error fetching data for pair ${pairConfig.name}:`, err);
@@ -137,18 +134,16 @@ export const useDex = (
         const events = await dexContract.queryFilter(swapFilter, -1000); // Last 1000 blocks
         
         // Sum up volume from recent events
-        for (const event of events) {
-          // Ethers v6 returns EventLog | Log; only EventLog has args & getBlock
-          const ev = event as unknown as { args?: any; blockNumber?: number };
-          if (!ev.args || typeof ev.blockNumber !== 'number') continue;
+        for (const ev of events) {
+          if (!('args' in ev) || ev.args === undefined) continue;
+          const { amountIn } = ev.args as { amountIn: bigint };
+          if (ev.blockNumber === undefined) continue;
 
-          // Filter by time window using block timestamp
           try {
             const block = await signer.provider.getBlock(ev.blockNumber);
             const ts = block?.timestamp ?? 0;
             if (ts >= oneDayAgo) {
-              const amountIn = parseFloat(ethers.formatEther(ev.args.amountIn ?? 0));
-              volume24h += amountIn;
+              volume24h += parseFloat(ethers.formatEther(amountIn));
             }
           } catch {}
         }

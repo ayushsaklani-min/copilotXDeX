@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
 import { REPUTATION_ABI, REPUTATION_ADDRESS, setReputationAddressLocal } from "../constants/reputation";
 
-export function useReputation(signer: ethers.Signer | null, address?: string) {
+export function useReputation(signer: ethers.JsonRpcSigner | null, address?: string) {
   const [score, setScore] = useState<number>(0);
 
   const resolveAddress = (): string | undefined => {
@@ -22,7 +22,7 @@ export function useReputation(signer: ethers.Signer | null, address?: string) {
     return REPUTATION_ADDRESS;
   };
 
-  const refresh = async () => {
+  const refreshReputation = useCallback(async () => {
     const repAddr = resolveAddress();
     if (!signer || !address || !repAddr) return;
     try {
@@ -32,13 +32,13 @@ export function useReputation(signer: ethers.Signer | null, address?: string) {
     } catch (err) {
       console.warn("Reputation fetch failed", err);
     }
-  };
+  }, [signer, address]);
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 10000);
+    refreshReputation();
+    const id = setInterval(refreshReputation, 10000);
     return () => clearInterval(id);
-  }, [signer, address]);
+  }, [refreshReputation, signer, address]);
 
   const addPoints = async (points: number) => {
     const repAddr = resolveAddress();
@@ -47,13 +47,13 @@ export function useReputation(signer: ethers.Signer | null, address?: string) {
       const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
       const tx = await rep.updateScore(address, points);
       await tx.wait();
-      refresh();
+      refreshReputation();
     } catch (err) {
       console.warn("Reputation update failed", err);
     }
   };
 
-  return { score, addPoints, refresh };
+  return { score, addPoints, refreshReputation };
 }
 
 

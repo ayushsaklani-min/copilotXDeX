@@ -1,7 +1,7 @@
 {
   "network": "polygon-amoy",
   "chainId": 80002,
-  "dexAddress": "0x7584970caB7A1E79b797Ec5A46679F048c8B330b",
+  "dexAddress": "0x860CFfF6364cE7cC76AbD003834e642Fa07a20E3",
   "reputationAddress": "0xf77AA837587dc07FE822C5CB0B3D5BF5294CaB42",
   "tokens": {
     "TIK": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
@@ -13,22 +13,22 @@
       "name": "TIK-TAK",
       "token0": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
       "token1": "0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3",
-      "pairKey": "0x13e5694a3ef17a256b3864b94cbb454aaccf8e12d74fd7fe54194fa0f5c50f4d",
-      "lpToken": "0xa732073DFCFF3AEB05Df4313354b6faa1b90B4A8"
+      "pairKey": "0xf37b8d36ba22a1e1d93736f664963fce1137f1a92869e792fa708c5f1085bee1",
+      "lpToken": "0x235b7Cb52BbF354f7dE866a7C4da7Ab9f97E1417"
     },
     {
       "name": "TIK-TOE",
       "token0": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
       "token1": "0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc",
       "pairKey": "0x483ffac07c5ffe524300b3d0c6d3898c7ed4b04139e04ff93e26972f7d77cd33",
-      "lpToken": "0x1a07a5dd6a8851A0b493b1ED6E4269CEE932B693"
+      "lpToken": "0x372de4a620eB67E6D55964308faB77A4639aA8CB"
     },
     {
       "name": "TAK-TOE",
       "token0": "0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3",
       "token1": "0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc",
       "pairKey": "0xd6556aa6611b8495549abd090f49e06fd7935af3517237e7a22cf61b3b570e25",
-      "lpToken": "0xe5B77c5d9Ad7b03499274d3B48BF4DBd19F54e49"
+      "lpToken": "0xADdCeD0666A295FaaeAB25649b926d94E4b63F56"
     }
   ],
   "abis": {
@@ -104,9 +104,13 @@
     ]
   },
   "deployment": {
-    "timestamp": "2025-10-13T21:48:06.655Z",
-    "blockNumber": 27667215,
-    "transactionHash": "0xf197542f2e5b19f6f4cdda0be47871143c97fd3e8b3e47f710017bf1c22f1381"
+    "timestamp": "2025-10-27T09:54:45.660Z",
+    "blockNumber": 28250551,
+    "transactionHash": "0xd11db048c2367b41bc592ed08d52ec8d661ffccb12af6b9df40f67d593f5b9cd"
   },
-  "tokenFactoryAddress": "0x52fCB8364F5D084F892898289a20ea4478b70814"
+  "tokenFactoryAddress": "0x52fCB8364F5D084F892898289a20ea4478b70814",
+  "referralAddress": "0x100bB5d61A85CA9fA905ea053c54ac3f59e05d3a",
+  "farmAddress": "0xdaf321167e32E46b5C256d07Bd1a37eeb951597F",
+  "farmRewardToken": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
+  "farmRewardPerSecond": "100000000000000000"
 }

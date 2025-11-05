@@ -51,8 +51,7 @@ export default function TikTakToeSwap({
     approveToken, 
     swapTokens, 
     estimateOutput,
-    checkAllowance,
-    syncReserves
+    checkAllowance
   } = useTikTakToeSwap(signer, address);
 
   // Check connection and network status
@@ -273,14 +272,14 @@ export default function TikTakToeSwap({
                 </div>
               )}
 
-              {/* Contract Reserves Info */}
+              {/* Contract Info */}
               {isConnected && isCorrectNetwork && (
                 <div className="neon-card p-4">
-                  <h4 className="text-lg font-semibold text-cyan-200 mb-3">Contract Reserves</h4>
+                  <h4 className="text-lg font-semibold text-cyan-200 mb-3">How It Works</h4>
                   <div className="text-sm text-gray-300 space-y-2">
-                    <p>• The swap contract needs to have reserves of both tokens to enable swaps</p>
-                    <p>• If reserves are empty, use the &quot;Sync Reserves&quot; button to update them</p>
-                    <p>• Make sure the contract has been funded with tokens</p>
+                    <p>• Swap between TIK, TAK, and TOE tokens using the TikTakDex AMM</p>
+                    <p>• First approve the token you want to swap, then execute the swap</p>
+                    <p>• A 0.3% fee is applied to each swap (0.25% to LPs, 0.05% to protocol)</p>
                   </div>
                 </div>
               )}
@@ -376,22 +375,6 @@ export default function TikTakToeSwap({
                         {isSwapping ? 'Swapping...' : 'Swap'}
                       </button>
                     </div>
-                    
-                    {/* Sync Reserves Button */}
-                    <button
-                      onClick={async () => {
-                        setStatus({ message: 'Syncing reserves...', type: 'info' });
-                        const success = await syncReserves();
-                        if (success) {
-                          setStatus({ message: 'Reserves synced successfully!', type: 'success' });
-                        } else {
-                          setStatus({ message: 'Failed to sync reserves', type: 'error' });
-                        }
-                      }}
-                      className="w-full py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors text-sm"
-                    >
-                      Sync Reserves
-                    </button>
                   </div>
 
                   {/* Status Messages */}

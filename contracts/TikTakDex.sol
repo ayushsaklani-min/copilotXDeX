@@ -381,6 +381,13 @@ contract TikTakDex is Ownable {
         }
     }
 
+    /**
+     * @dev Award reputation points to user for DEX actions
+     * @param user Address of the user
+     * @param points Number of points to award
+     * @param pairKey The pair key for the action
+     * @param action The action type (SWAP, ADD_LIQ, etc.)
+     */
     function _awardReputation(address user, uint256 points, bytes32 pairKey, bytes32 action) internal {
         if (reputationContract == address(0)) return;
         // Gamified scheme based on action points

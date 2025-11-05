@@ -6,6 +6,8 @@ import { ethers } from 'ethers';
 import { motion, AnimatePresence } from 'framer-motion';
 import DexAIAssistant from './components/DexAIAssistant';
 import PoolAnalytics from './components/PoolAnalytics';
+import FarmDashboard from '../components/FarmDashboard';
+import ReferralDashboard from '../components/ReferralDashboard';
 import { usePrices } from '../../hooks/usePrices';
 import contracts from '../../config/contracts.json';
 
@@ -22,7 +24,7 @@ const TOKENS = contracts.tokens as Record<string, string>;
 const DEX_ADDRESS = contracts.dexAddress as string;
 
 export default function DexPage() {
-  const [activeTab, setActiveTab] = useState<'swap' | 'liquidity' | 'analytics' | 'ai'>('swap');
+  const [activeTab, setActiveTab] = useState<'swap' | 'liquidity' | 'analytics' | 'ai' | 'farming' | 'referrals'>('swap');
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -65,35 +67,43 @@ export default function DexPage() {
     chainId: 80002,
     chainIdHex: '0x13882',
     name: 'Polygon Amoy',
-    rpcUrl: 'https://rpc-amoy.polygon.technology/',
+    rpcUrl: process.env.NEXT_PUBLIC_AMOY_RPC_URL || 'https://polygon-amoy.infura.io/v3/5b88739e5f9d4b828d0c2237429f0524',
+    fallbackRpcUrl: process.env.NEXT_PUBLIC_AMOY_FALLBACK_RPC_URL || 'https://rpc-amoy.polygon.technology/',
     explorerUrl: 'https://amoy.polygonscan.com/',
   };
 
   // Check wallet connection
   useEffect(() => {
     const checkConnection = async () => {
-      if (typeof window !== 'undefined' && (window as any).ethereum) {
-        try {
-          const provider = new ethers.BrowserProvider(getExternalProvider());
-          const accounts = await provider.listAccounts();
-          
-          if (accounts.length > 0) {
-            const signer = await provider.getSigner();
-            const address = await signer.getAddress();
-            const network = await provider.getNetwork();
-            
-            setSigner(signer);
-            setAddress(address);
-            setIsConnected(true);
-            setIsCorrectNetwork(Number(network.chainId) === POLYGON_AMOY_CONFIG.chainId);
-          }
-        } catch (error) {
-          console.error('Error checking connection:', error);
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      const maybeWindow = window as unknown as { ethereum?: unknown };
+      if (!maybeWindow.ethereum) {
+        return;
+      }
+
+      try {
+        const provider = new ethers.BrowserProvider(getExternalProvider());
+        const accounts = await provider.listAccounts();
+
+        if (accounts.length > 0) {
+          const signer = await provider.getSigner();
+          const address = await signer.getAddress();
+          const network = await provider.getNetwork();
+
+          setSigner(signer);
+          setAddress(address);
+          setIsConnected(true);
+          setIsCorrectNetwork(Number(network.chainId) === POLYGON_AMOY_CONFIG.chainId);
         }
+      } catch (error) {
+        console.error('Error checking connection:', error);
       }
     };
 
-    checkConnection();
+    void checkConnection();
   }, [POLYGON_AMOY_CONFIG.chainId]);
 
   // Load token balances
@@ -256,7 +266,7 @@ export default function DexPage() {
     }
   };
 
-  // Calculate output amount for swap
+  // Calculate output amount for swap with retry logic
   const calculateOutput = useCallback(async () => {
     if (!signer || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken === toToken) {
       setToAmount('');
@@ -264,126 +274,280 @@ export default function DexPage() {
       return;
     }
 
-    try {
-      const dexAbi = [
-        "function getAmountOut(uint256 amountIn, address tokenIn, address tokenOut) external view returns (uint256)",
-        "function getUserFeeRate(address user) external view returns (uint256)"
-      ];
-      
-      const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
-      const amountInWei = ethers.parseEther(fromAmount);
-      const amountOutWei = await dex.getAmountOut(amountInWei, TOKENS[fromToken as keyof typeof TOKENS], TOKENS[toToken as keyof typeof TOKENS]);
-      const amountOut = ethers.formatEther(amountOutWei);
-      
-      try {
-        const rate = await dex.getUserFeeRate(address);
-        setFeeRateBps(Number(rate));
-      } catch {}
-      
-      setToAmount(amountOut);
-    } catch (error) {
-      console.error('Error calculating output:', error);
-      setToAmount('');
-      setFeeRateBps(null);
-    }
-  }, [signer, fromAmount, fromToken, toToken]);
+    let retryCount = 0;
+    const maxRetries = 3;
 
-  // Check approval status
+    while (retryCount < maxRetries) {
+      try {
+        const dexAbi = [
+          "function getAmountOut(uint256 amountIn, address tokenIn, address tokenOut) external view returns (uint256)",
+          "function getUserFeeRate(address user) external view returns (uint256)"
+        ];
+        
+        const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
+        const amountInWei = ethers.parseEther(fromAmount);
+        
+        // Add timeout and retry logic
+        const amountOutWei = await Promise.race([
+          dex.getAmountOut(amountInWei, TOKENS[fromToken as keyof typeof TOKENS], TOKENS[toToken as keyof typeof TOKENS]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+        ]) as bigint;
+        
+        const amountOut = ethers.formatEther(amountOutWei);
+        
+        // Try to get fee rate with retry
+        try {
+          const rate = await Promise.race([
+            dex.getUserFeeRate(address),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+          ]) as bigint;
+          setFeeRateBps(Number(rate));
+        } catch (feeError) {
+          console.warn('Fee rate fetch failed:', feeError);
+          setFeeRateBps(null);
+        }
+        
+        setToAmount(amountOut);
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        retryCount++;
+        console.warn(`Output calculation attempt ${retryCount} failed:`, error);
+        
+        if (error.message?.includes('missing revert data') || 
+            error.message?.includes('Internal JSON-RPC error') ||
+            error.message?.includes('Timeout')) {
+          if (retryCount < maxRetries) {
+            console.log(`Retrying output calculation in ${retryCount * 1000}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+            continue;
+          } else {
+            console.error('Output calculation failed after retries:', error);
+            setToAmount('');
+            setFeeRateBps(null);
+            setStatus({ message: 'Unable to calculate swap output. Please try again.', type: 'error' });
+            break;
+          }
+        } else {
+          console.error('Error calculating output:', error);
+          setToAmount('');
+          setFeeRateBps(null);
+          break;
+        }
+      }
+    }
+  }, [signer, fromAmount, fromToken, toToken, address]);
+
+  // Check approval status with retry logic
   const checkApproval = useCallback(async () => {
     if (!signer || !address || !fromAmount || parseFloat(fromAmount) <= 0) {
       setIsApproved(false);
       return;
     }
 
-    try {
-      const erc20Abi = ['function allowance(address, address) view returns (uint256)'];
-      const contract = new ethers.Contract(TOKENS[fromToken as keyof typeof TOKENS], erc20Abi, signer);
-      const allowance = await contract.allowance(address, DEX_ADDRESS);
-      const amountWei = ethers.parseEther(fromAmount);
-      
-      setIsApproved(allowance >= amountWei);
-    } catch (error) {
-      console.error('Error checking approval:', error);
-      setIsApproved(false);
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        const erc20Abi = ['function allowance(address, address) view returns (uint256)'];
+        const contract = new ethers.Contract(TOKENS[fromToken as keyof typeof TOKENS], erc20Abi, signer);
+        
+        // Add timeout
+        const allowance = await Promise.race([
+          contract.allowance(address, DEX_ADDRESS),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ]) as bigint;
+        
+        const amountWei = ethers.parseEther(fromAmount);
+        setIsApproved(allowance >= amountWei);
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        retryCount++;
+        console.warn(`Approval check attempt ${retryCount} failed:`, error);
+        
+        if (error.message?.includes('missing revert data') || 
+            error.message?.includes('Internal JSON-RPC error') ||
+            error.message?.includes('Timeout')) {
+          if (retryCount < maxRetries) {
+            console.log(`Retrying approval check in ${retryCount * 500}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryCount * 500));
+            continue;
+          } else {
+            console.error('Approval check failed after retries:', error);
+            setIsApproved(false);
+            break;
+          }
+        } else {
+          console.error('Error checking approval:', error);
+          setIsApproved(false);
+          break;
+        }
+      }
     }
   }, [signer, address, fromAmount, fromToken]);
 
-  // Approve tokens
+  // Approve tokens with retry logic
   const handleApprove = useCallback(async () => {
     if (!signer || !address) return;
 
-    try {
-      const erc20Abi = ['function approve(address, uint256) returns (bool)'];
-      const contract = new ethers.Contract(TOKENS[fromToken as keyof typeof TOKENS], erc20Abi, signer);
-      
-      const amountWei = ethers.parseEther(fromAmount);
-      const tx = await contract.approve(DEX_ADDRESS, amountWei);
-      await tx.wait();
-      
-      setIsApproved(true);
-      setStatus({ message: `${fromToken} approved successfully!`, type: 'success' });
-    } catch (error) {
-      console.error('Error approving token:', error);
-      setStatus({ message: 'Failed to approve token', type: 'error' });
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        const erc20Abi = ['function approve(address, uint256) returns (bool)'];
+        const contract = new ethers.Contract(TOKENS[fromToken as keyof typeof TOKENS], erc20Abi, signer);
+        
+        const amountWei = ethers.parseEther(fromAmount);
+        
+        // Estimate gas first
+        let gasEstimate;
+        try {
+          gasEstimate = await contract.approve.estimateGas(DEX_ADDRESS, amountWei);
+        } catch (gasError) {
+          console.warn('Gas estimation failed, using default:', gasError);
+          gasEstimate = 100000n; // Default gas limit
+        }
+        
+        const tx = await contract.approve(DEX_ADDRESS, amountWei, {
+          gasLimit: gasEstimate + 10000n // Add buffer
+        });
+        
+        const receipt = await tx.wait();
+        
+        if (receipt) {
+          setIsApproved(true);
+          setStatus({ message: `${fromToken} approved successfully!`, type: 'success' });
+          break; // Success, exit retry loop
+        }
+      } catch (error: any) {
+        retryCount++;
+        console.warn(`Approval attempt ${retryCount} failed:`, error);
+        
+        if (error.message?.includes('Internal JSON-RPC error') ||
+            error.message?.includes('could not coalesce error') ||
+            error.message?.includes('user rejected')) {
+          if (retryCount < maxRetries && !error.message?.includes('user rejected')) {
+            console.log(`Retrying approval in ${retryCount * 1000}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+            continue;
+          } else {
+            console.error('Approval failed after retries:', error);
+            setStatus({ 
+              message: error.message?.includes('user rejected') 
+                ? 'Transaction was rejected by user' 
+                : 'Failed to approve token. Please try again.', 
+              type: 'error' 
+            });
+            break;
+          }
+        } else {
+          console.error('Error approving token:', error);
+          setStatus({ message: 'Failed to approve token', type: 'error' });
+          break;
+        }
+      }
     }
   }, [signer, address, fromAmount, fromToken, setStatus]);
 
-  // Execute swap
+  // Execute swap with retry logic
   const handleSwap = async () => {
     if (!signer || !address || !fromAmount || !toAmount) return;
 
     setIsSwapping(true);
     setStatus({ message: 'Executing swap...', type: 'info' });
 
-    try {
-      const dexAbi = [
-        "function swapExactTokensForTokens(address tokenIn, address tokenOut, uint256 amountIn, address to) external returns (uint256)",
-      ];
-      
-      const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
-      const amountInWei = ethers.parseEther(fromAmount);
-      
-      const tx = await dex.swapExactTokensForTokens(
-        TOKENS[fromToken as keyof typeof TOKENS],
-        TOKENS[toToken as keyof typeof TOKENS],
-        amountInWei,
-        address,
-        {
-          gasLimit: 250000
-        }
-      );
-      
-      const receipt = await tx.wait();
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      // Attempt reputation +1 here too for direct DEX swaps page (defensive duplicate)
+    while (retryCount < maxRetries) {
       try {
-        const { REPUTATION_ABI, REPUTATION_ADDRESS } = await import("../../constants/reputation");
-        const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
-        if (repAddr) {
-          const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
-          await rep.updateScore(address, 1);
-          console.log('Reputation +1 for swap');
+        const dexAbi = [
+          "function swapExactTokensForTokens(address tokenIn, address tokenOut, uint256 amountIn, address to) external returns (uint256)",
+        ];
+        
+        const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
+        const amountInWei = ethers.parseEther(fromAmount);
+        
+        // Estimate gas first
+        let gasEstimate;
+        try {
+          gasEstimate = await dex.swapExactTokensForTokens.estimateGas(
+            TOKENS[fromToken as keyof typeof TOKENS],
+            TOKENS[toToken as keyof typeof TOKENS],
+            amountInWei,
+            address
+          );
+        } catch (gasError) {
+          console.warn('Gas estimation failed, using default:', gasError);
+          gasEstimate = 300000n; // Default gas limit for swaps
         }
-      } catch (e) {
-        console.warn('Reputation update swap failed', e);
+        
+        const tx = await dex.swapExactTokensForTokens(
+          TOKENS[fromToken as keyof typeof TOKENS],
+          TOKENS[toToken as keyof typeof TOKENS],
+          amountInWei,
+          address,
+          {
+            gasLimit: gasEstimate + 20000n // Add buffer
+          }
+        );
+        
+        const receipt = await tx.wait();
+
+        // Attempt reputation +1 here too for direct DEX swaps page (defensive duplicate)
+        try {
+          const { REPUTATION_ABI, REPUTATION_ADDRESS } = await import("../../constants/reputation");
+          const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
+          if (repAddr) {
+            const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
+            await rep.updateScore(address, 1);
+            console.log('Reputation +1 for swap');
+          }
+        } catch (e) {
+          console.warn('Reputation update swap failed', e);
+        }
+        
+        setStatus({ 
+          message: `Swap successful! TX: ${receipt.hash.slice(0, 10)}...`, 
+          type: 'success' 
+        });
+        
+        // Reset form
+        setFromAmount('');
+        setToAmount('');
+        setIsApproved(false);
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        retryCount++;
+        console.warn(`Swap attempt ${retryCount} failed:`, error);
+        
+        if (error.message?.includes('Internal JSON-RPC error') ||
+            error.message?.includes('could not coalesce error') ||
+            error.message?.includes('user rejected')) {
+          if (retryCount < maxRetries && !error.message?.includes('user rejected')) {
+            console.log(`Retrying swap in ${retryCount * 1000}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+            continue;
+          } else {
+            console.error('Swap failed after retries:', error);
+            setStatus({ 
+              message: error.message?.includes('user rejected') 
+                ? 'Transaction was rejected by user' 
+                : `Swap failed: ${error.message || 'Unknown error'}. Please try again.`, 
+              type: 'error' 
+            });
+            break;
+          }
+        } else {
+          console.error('Error executing swap:', error);
+          setStatus({ message: `Swap failed: ${error.message || 'Unknown error'}`, type: 'error' });
+          break;
+        }
       }
-      
-      setStatus({ 
-        message: `Swap successful! TX: ${receipt.hash.slice(0, 10)}...`, 
-        type: 'success' 
-      });
-      
-      // Reset form
-      setFromAmount('');
-      setToAmount('');
-      setIsApproved(false);
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      console.error('Error executing swap:', error);
-      setStatus({ message: `Swap failed: ${err.message || 'Unknown error'}`, type: 'error' });
-    } finally {
-      setIsSwapping(false);
     }
+    
+    setIsSwapping(false);
   };
 
   // Add liquidity
@@ -616,6 +780,8 @@ export default function DexPage() {
   const tabs = [
     { id: 'swap', label: 'Swap', icon: '🔄' },
     { id: 'liquidity', label: 'Liquidity', icon: '💧' },
+    { id: 'farming', label: 'Farming', icon: '🌾' },
+    { id: 'referrals', label: 'Referrals', icon: '👥' },
     { id: 'analytics', label: 'Analytics', icon: '📊' },
     { id: 'ai', label: 'AI Assistant', icon: '🤖' },
   ] as const;
@@ -714,450 +880,382 @@ export default function DexPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className={`grid ${activeTab === 'liquidity' ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'} gap-8`}
+               className={`grid ${['liquidity', 'farming', 'referrals'].includes(activeTab) ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'} gap-8`}
           >
             {/* Main Panel */}
-            <div className={`${activeTab === 'liquidity' ? 'lg:col-span-2' : ''}`}>
+            <div className={`${['liquidity', 'farming', 'referrals'].includes(activeTab) ? 'lg:col-span-2' : ''}`}>
               {activeTab === 'swap' && (
-              <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-8 min-h-[520px]">
-                <h2 className="text-2xl font-bold text-white mb-6">Swap Tokens</h2>
-                
-                {/* From Token */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-300 mb-2">From</label>
-                  <div className="bg-white/5 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <select
-                        value={fromToken}
-                        onChange={(e) => setFromToken(e.target.value)}
-                        className="bg-transparent text-white font-semibold text-lg focus:outline-none"
-                      >
-                        {Object.keys(TOKENS).map((symbol) => (
-                          <option key={symbol} value={symbol} className="bg-gray-800 text-white">
-                            {symbol}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <input
-                      type="number"
-                      value={fromAmount}
-                      onChange={(e) => setFromAmount(e.target.value)}
-                      placeholder="0.0"
-                      className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
-                      step="0.000001"
-                      min="0"
-                    />
-                    <div className="text-sm text-gray-400 mt-1">
-                      Balance: {balances[fromToken]?.toFixed(6) || '0.000000'} {fromToken}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Swap Button */}
-                <div className="flex justify-center my-4">
-                  <button
-                    onClick={() => {
-                      const tempToken = fromToken;
-                      const tempAmount = fromAmount;
-                      setFromToken(toToken);
-                      setToToken(tempToken);
-                      setFromAmount(toAmount);
-                      setToAmount(tempAmount);
-                    }}
-                    className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-                  >
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* To Token */}
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-300 mb-2">To</label>
-                  <div className="bg-white/5 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <select
-                        value={toToken}
-                        onChange={(e) => setToToken(e.target.value)}
-                        className="bg-transparent text-white font-semibold text-lg focus:outline-none"
-                      >
-                        {Object.keys(TOKENS).map((symbol) => (
-                          <option key={symbol} value={symbol} className="bg-gray-800 text-white">
-                            {symbol}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="text-white text-2xl font-bold">
-                      {toAmount || '0.0'}
-                    </div>
-                    <div className="text-sm text-gray-400 mt-1">
-                      Balance: {balances[toToken]?.toFixed(6) || '0.000000'} {toToken}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-3">
-                  {feeRateBps !== null && (
-                    <div className="text-sm text-gray-300 flex items-center gap-2">
-                      <span>
-                        Fee Rate: <span className="text-white font-semibold">{(feeRateBps / 100).toFixed(2)}%</span>
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 border border-white/10">
-                        {feeRateBps <= 5 ? '💎 Diamond' : feeRateBps <= 10 ? '🥇 Gold' : feeRateBps <= 20 ? '🥈 Silver' : '🥉 Bronze'}
-                      </span>
-                    </div>
-                  )}
-                  {!isApproved && fromAmount && (
-                    <button
-                      onClick={handleApprove}
-                      disabled={!fromAmount || parseFloat(fromAmount) <= 0}
-                      className="w-full py-4 px-6 bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-500 text-black font-bold rounded-lg transition-colors"
-                    >
-                      Approve {fromToken}
-                    </button>
-                  )}
+                <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-8 min-h-[520px]">
+                  <h2 className="text-2xl font-bold text-white mb-6">Swap Tokens</h2>
                   
-                  <button
-                    onClick={handleSwap}
-                    disabled={isSwapping || !fromAmount || !toAmount || !isApproved || fromToken === toToken}
-                    className="w-full py-4 px-6 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-500 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
-                  >
-                    {isSwapping ? 'Swapping...' : 'Swap'}
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            {activeTab === 'liquidity' && (
-              <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Liquidity Management</h2>
-                  <button
-                    onClick={async () => {
-                      setIsRefreshing(true);
-                      setStatus({ message: 'Refreshing data...', type: 'info' });
-                      try {
-                        await Promise.all([loadBalances(), loadPools()]);
-                        setStatus({ message: 'Data refreshed', type: 'success' });
-                      } catch {
-                        setStatus({ message: 'Refresh failed', type: 'error' });
-                      } finally {
-                        setIsRefreshing(false);
-                      }
-                    }}
-                    disabled={isRefreshing}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-60 text-cyan-300 rounded-lg border border-cyan-500/30 font-semibold"
-                  >
-                    {isRefreshing ? 'Refreshing...' : 'Refresh'}
-                  </button>
-                </div>
-                
-                {/* Liquidity Tabs */}
-                <div className="flex space-x-1 mb-6 bg-black/20 rounded-lg p-1">
-                  <button
-                    onClick={() => setLiquidityTab('add')}
-                    className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${
-                      liquidityTab === 'add'
-                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
-                        : 'text-gray-300 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    Add Liquidity
-                  </button>
-                  <button
-                    onClick={() => setLiquidityTab('remove')}
-                    className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${
-                      liquidityTab === 'remove'
-                        ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white'
-                        : 'text-gray-300 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    Remove Liquidity
-                  </button>
-                </div>
-
-                {liquidityTab === 'add' && (
-                  <div className="space-y-6">
-                    {/* Pool Selection */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-300 mb-2">Select Pool</label>
-                      <select
-                        value={selectedPool}
-                        onChange={(e) => {
-                          setSelectedPool(e.target.value);
-                          const pool = pools.find(p => p.name === e.target.value);
-                          if (pool) {
-                            setTokenA(pool.token0 === TOKENS.TIK ? 'TIK' : pool.token0 === TOKENS.TAK ? 'TAK' : 'TOE');
-                            setTokenB(pool.token1 === TOKENS.TIK ? 'TIK' : pool.token1 === TOKENS.TAK ? 'TAK' : 'TOE');
-                          }
-                        }}
-                        className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-gray-600 focus:border-cyan-500 focus:outline-none"
-                      >
-                        {pools.map((pool) => (
-                          <option key={pool.name} value={pool.name} className="bg-gray-800 text-white">
-                            {pool.name} (TVL: ${pool.tvl.toFixed(2)})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Token A */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-300 mb-2">Token A</label>
-                      <div className="bg-white/5 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <select
-                            value={tokenA}
-                            onChange={(e) => setTokenA(e.target.value)}
-                            className="bg-transparent text-white font-semibold text-lg focus:outline-none"
-                          >
-                            {Object.keys(TOKENS).map((symbol) => (
-                              <option key={symbol} value={symbol} className="bg-gray-800 text-white">
-                                {symbol}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <input
-                          type="number"
-                          value={amountA}
-                          onChange={(e) => setAmountA(e.target.value)}
-                          placeholder="0.0"
-                          className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
-                          step="0.000001"
-                          min="0"
-                        />
-                        <div className="text-sm text-gray-400 mt-1">
-                          Balance: {balances[tokenA]?.toFixed(6) || '0.000000'} {tokenA}
-                        </div>
+                  {/* From Token */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">From</label>
+                    <div className="bg-white/5 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <select
+                          value={fromToken}
+                          onChange={(e) => setFromToken(e.target.value)}
+                          className="bg-transparent text-white font-semibold text-lg focus:outline-none"
+                        >
+                          {Object.keys(TOKENS).map((symbol) => (
+                            <option key={symbol} value={symbol} className="bg-gray-800 text-white">
+                              {symbol}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <input
+                        type="number"
+                        value={fromAmount}
+                        onChange={(e) => setFromAmount(e.target.value)}
+                        placeholder="0.0"
+                        className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
+                        step="0.000001"
+                        min="0"
+                      />
+                      <div className="text-sm text-gray-400 mt-1">
+                        Balance: {balances[fromToken]?.toFixed(6) || '0.000000'} {fromToken}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Token B */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-300 mb-2">Token B</label>
-                      <div className="bg-white/5 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <select
-                            value={tokenB}
-                            onChange={(e) => setTokenB(e.target.value)}
-                            className="bg-transparent text-white font-semibold text-lg focus:outline-none"
-                          >
-                            {Object.keys(TOKENS).map((symbol) => (
-                              <option key={symbol} value={symbol} className="bg-gray-800 text-white">
-                                {symbol}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <input
-                          type="number"
-                          value={amountB}
-                          onChange={(e) => setAmountB(e.target.value)}
-                          placeholder="0.0"
-                          className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
-                          step="0.000001"
-                          min="0"
-                        />
-                        <div className="text-sm text-gray-400 mt-1">
-                          Balance: {balances[tokenB]?.toFixed(6) || '0.000000'} {tokenB}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Add Liquidity Button */}
+                  {/* Swap Button */}
+                  <div className="flex justify-center my-4">
                     <button
-                      onClick={handleAddLiquidity}
-                      disabled={isAdding || !amountA || !amountB || parseFloat(amountA) <= 0 || parseFloat(amountB) <= 0}
-                      className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-500 disabled:to-gray-500 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
+                      onClick={() => {
+                        const tempToken = fromToken;
+                        const tempAmount = fromAmount;
+                        setFromToken(toToken);
+                        setToToken(tempToken);
+                        setFromAmount(toAmount);
+                        setToAmount(tempAmount);
+                      }}
+                      className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
                     >
-                      {isAdding ? 'Adding Liquidity...' : 'Add Liquidity'}
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
                     </button>
                   </div>
-                )}
 
-                {liquidityTab === 'remove' && (
-                  <div className="space-y-6">
-                    {/* Pool Selection */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-300 mb-2">Select Pool</label>
-                      <select
-                        value={removePool}
-                        onChange={(e) => setRemovePool(e.target.value)}
-                        className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-gray-600 focus:border-cyan-500 focus:outline-none"
-                      >
-                        {pools.map((pool) => (
-                          <option key={pool.name} value={pool.name} className="bg-gray-800 text-white">
-                            {pool.name} (Your LP: {parseFloat(userLpBalances[pool.name] || '0').toFixed(6)})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* LP Amount */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-300 mb-2">LP Token Amount</label>
-                      <div className="bg-white/5 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-white font-semibold text-lg">LP Tokens</span>
-                          <button
-                            onClick={() => setLpAmount((userLpBalances[removePool] || '0'))}
-                            className="px-3 py-1 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-semibold transition-colors"
-                          >
-                            MAX
-                          </button>
-                        </div>
-                        <input
-                          type="number"
-                          value={lpAmount}
-                          onChange={(e) => setLpAmount(e.target.value)}
-                          placeholder="0.0"
-                          className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
-                          step="0.000001"
-                          min="0"
-                        />
-                        <div className="text-sm text-gray-400 mt-1">
-                          Balance: {parseFloat(userLpBalances[removePool] || '0').toFixed(6)} LP
-                        </div>
+                  {/* To Token */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">To</label>
+                    <div className="bg-white/5 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <select
+                          value={toToken}
+                          onChange={(e) => setToToken(e.target.value)}
+                          className="bg-transparent text-white font-semibold text-lg focus:outline-none"
+                        >
+                          {Object.keys(TOKENS).map((symbol) => (
+                            <option key={symbol} value={symbol} className="bg-gray-800 text-white">
+                              {symbol}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="text-white text-2xl font-bold">
+                        {toAmount || '0.0'}
+                      </div>
+                      <div className="text-sm text-gray-400 mt-1">
+                        Balance: {balances[toToken]?.toFixed(6) || '0.000000'} {toToken}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Remove Liquidity Button */}
+                  {/* Action Buttons */}
+                  <div className="space-y-3">
+                    {feeRateBps !== null && (
+                      <div className="text-sm text-gray-300 flex items-center gap-2">
+                        <span>
+                          Fee Rate: <span className="text-white font-semibold">{(feeRateBps / 100).toFixed(2)}%</span>
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 border border-white/10">
+                          {feeRateBps <= 5 ? '💎 Diamond' : feeRateBps <= 10 ? '🥇 Gold' : feeRateBps <= 20 ? '🥈 Silver' : '🥉 Bronze'}
+                        </span>
+                      </div>
+                    )}
+                    {!isApproved && fromAmount && (
+                      <button
+                        onClick={handleApprove}
+                        disabled={!fromAmount || parseFloat(fromAmount) <= 0}
+                        className="w-full py-4 px-6 bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-500 text-black font-bold rounded-lg transition-colors"
+                      >
+                        Approve {fromToken}
+                      </button>
+                    )}
+                    
                     <button
-                      onClick={handleRemoveLiquidity}
-                      disabled={isRemoving || !lpAmount || parseFloat(lpAmount) <= 0}
-                      className="w-full py-4 px-6 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 disabled:from-gray-500 disabled:to-gray-500 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
+                      onClick={handleSwap}
+                      disabled={isSwapping || !fromAmount || !toAmount || !isApproved || fromToken === toToken}
+                      className="w-full py-4 px-6 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-500 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
                     >
-                      {isRemoving ? 'Removing Liquidity...' : 'Remove Liquidity'}
+                      {isSwapping ? 'Swapping...' : 'Swap'}
                     </button>
                   </div>
-                )}
-              </div>
-            )}
-            
-            {activeTab === 'analytics' && (
-              <PoolAnalytics
-                signer={signer}
-                address={address}
-                isConnected={isConnected}
-                isCorrectNetwork={isCorrectNetwork}
-                prices={prices}
-                dex={{
-                  pairs: pools.map((p) => ({
-                    name: p.name,
-                    reserve0: Number(p.reserve0),
-                    reserve1: Number(p.reserve1),
-                  }))
-                }}
-              />
-            )}
+                </div>
+              )}
+              
+              {activeTab === 'liquidity' && (
+                <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-8">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-bold text-white">Liquidity Management</h2>
+                    <button
+                      onClick={async () => {
+                        setIsRefreshing(true);
+                        setStatus({ message: 'Refreshing data...', type: 'info' });
+                        try {
+                          await Promise.all([loadBalances(), loadPools()]);
+                          setStatus({ message: 'Data refreshed', type: 'success' });
+                        } catch {
+                          setStatus({ message: 'Refresh failed', type: 'error' });
+                        } finally {
+                          setIsRefreshing(false);
+                        }
+                      }}
+                      disabled={isRefreshing}
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-60 text-cyan-300 rounded-lg border border-cyan-500/30 font-semibold"
+                    >
+                      {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+                  
+                  {/* Liquidity Tabs */}
+                  <div className="flex space-x-1 mb-6 bg-black/20 rounded-lg p-1">
+                    <button
+                      onClick={() => setLiquidityTab('add')}
+                      className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${
+                        liquidityTab === 'add'
+                          ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
+                          : 'text-gray-300 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      Add Liquidity
+                    </button>
+                    <button
+                      onClick={() => setLiquidityTab('remove')}
+                      className={`flex-1 py-2 px-4 rounded-md font-semibold transition-colors ${
+                        liquidityTab === 'remove'
+                          ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white'
+                          : 'text-gray-300 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      Remove Liquidity
+                    </button>
+                  </div>
 
-            {activeTab === 'ai' && (
-              <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6 min-h-[520px]">
-                <h2 className="text-2xl font-bold text-white mb-6">AI Assistant</h2>
-                <DexAIAssistant 
+                  {liquidityTab === 'add' && (
+                    <div className="space-y-6">
+                      {/* Pool Selection */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-2">Select Pool</label>
+                        <select
+                          value={selectedPool}
+                          onChange={(e) => {
+                            setSelectedPool(e.target.value);
+                            const pool = pools.find(p => p.name === e.target.value);
+                            if (pool) {
+                              setTokenA(pool.token0 === TOKENS.TIK ? 'TIK' : pool.token0 === TOKENS.TAK ? 'TAK' : 'TOE');
+                              setTokenB(pool.token1 === TOKENS.TIK ? 'TIK' : pool.token1 === TOKENS.TAK ? 'TAK' : 'TOE');
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-gray-600 focus:border-cyan-500 focus:outline-none"
+                        >
+                          {pools.map((pool) => (
+                            <option key={pool.name} value={pool.name} className="bg-gray-800 text-white">
+                              {pool.name} (TVL: ${pool.tvl.toFixed(2)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Token A */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-2">Token A</label>
+                        <div className="bg-white/5 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <select
+                              value={tokenA}
+                              onChange={(e) => setTokenA(e.target.value)}
+                              className="bg-transparent text-white font-semibold text-lg focus:outline-none"
+                            >
+                              {Object.keys(TOKENS).map((symbol) => (
+                                <option key={symbol} value={symbol} className="bg-gray-800 text-white">
+                                  {symbol}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <input
+                            type="number"
+                            value={amountA}
+                            onChange={(e) => setAmountA(e.target.value)}
+                            placeholder="0.0"
+                            className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
+                            step="0.000001"
+                            min="0"
+                          />
+                          <div className="text-sm text-gray-400 mt-1">
+                            Balance: {balances[tokenA]?.toFixed(6) || '0.000000'} {tokenA}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Token B */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-2">Token B</label>
+                        <div className="bg-white/5 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <select
+                              value={tokenB}
+                              onChange={(e) => setTokenB(e.target.value)}
+                              className="bg-transparent text-white font-semibold text-lg focus:outline-none"
+                            >
+                              {Object.keys(TOKENS).map((symbol) => (
+                                <option key={symbol} value={symbol} className="bg-gray-800 text-white">
+                                  {symbol}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <input
+                            type="number"
+                            value={amountB}
+                            onChange={(e) => setAmountB(e.target.value)}
+                            placeholder="0.0"
+                            className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
+                            step="0.000001"
+                            min="0"
+                          />
+                          <div className="text-sm text-gray-400 mt-1">
+                            Balance: {balances[tokenB]?.toFixed(6) || '0.000000'} {tokenB}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Add Liquidity Button */}
+                      <button
+                        onClick={handleAddLiquidity}
+                        disabled={isAdding || !amountA || !amountB || parseFloat(amountA) <= 0 || parseFloat(amountB) <= 0}
+                        className="w-full py-4 px-6 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:from-gray-500 disabled:to-gray-500 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
+                      >
+                        {isAdding ? 'Adding Liquidity...' : 'Add Liquidity'}
+                      </button>
+                    </div>
+                  )}
+
+                  {liquidityTab === 'remove' && (
+                    <div className="space-y-6">
+                      {/* Pool Selection */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-2">Select Pool</label>
+                        <select
+                          value={removePool}
+                          onChange={(e) => setRemovePool(e.target.value)}
+                          className="w-full px-3 py-2 bg-white/10 text-white rounded-lg border border-gray-600 focus:border-cyan-500 focus:outline-none"
+                        >
+                          {pools.map((pool) => (
+                            <option key={pool.name} value={pool.name} className="bg-gray-800 text-white">
+                              {pool.name} (Your LP: {parseFloat(userLpBalances[pool.name] || '0').toFixed(6)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* LP Amount */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-300 mb-2">LP Token Amount</label>
+                        <div className="bg-white/5 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-white font-semibold text-lg">LP Tokens</span>
+                            <button
+                              onClick={() => setLpAmount((userLpBalances[removePool] || '0'))}
+                              className="px-3 py-1 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-semibold transition-colors"
+                            >
+                              MAX
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            value={lpAmount}
+                            onChange={(e) => setLpAmount(e.target.value)}
+                            placeholder="0.0"
+                            className="w-full bg-transparent text-white text-2xl font-bold focus:outline-none"
+                            step="0.000001"
+                            min="0"
+                          />
+                          <div className="text-sm text-gray-400 mt-1">
+                            Balance: {parseFloat(userLpBalances[removePool] || '0').toFixed(6)} LP
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Remove Liquidity Button */}
+                      <button
+                        onClick={handleRemoveLiquidity}
+                        disabled={isRemoving || !lpAmount || parseFloat(lpAmount) <= 0}
+                        className="w-full py-4 px-6 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 disabled:from-gray-500 disabled:to-gray-500 text-white font-bold rounded-lg transition-all duration-200 shadow-lg"
+                      >
+                        {isRemoving ? 'Removing Liquidity...' : 'Remove Liquidity'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+                 {activeTab === 'farming' && (
+                   <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
+                     <FarmDashboard
+                       standalone={false}
+                       signerOverride={signer}
+                       addressOverride={address}
+                       networkOkOverride={isCorrectNetwork}
+                     />
+                   </div>
+                 )}
+
+                 {activeTab === 'referrals' && (
+                   <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
+                     <ReferralDashboard
+                       standalone={false}
+                       signer={signer}
+                       address={address}
+                     />
+                   </div>
+                 )}
+
+              {activeTab === 'analytics' && (
+                <PoolAnalytics
                   signer={signer}
                   address={address}
-                  pools={pools}
-                  userLpBalances={userLpBalances}
-                  userBalances={Object.fromEntries(Object.entries(balances).map(([key, value]) => [key, value.toString()]))}
+                  isConnected={isConnected}
+                  isCorrectNetwork={isCorrectNetwork}
+                  prices={prices}
+                  dex={{
+                    pairs: pools.map((p) => ({
+                      name: p.name,
+                      reserve0: Number(p.reserve0),
+                      reserve1: Number(p.reserve1),
+                    }))
+                  }}
                 />
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {activeTab === 'liquidity' && (
-              <>
-                {/* Pool Overview */}
-                <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
-                  <h3 className="text-xl font-bold text-white mb-4">Pool Overview</h3>
-                  <div className="space-y-3">
-                    {pools.map((pool) => (
-                      <div key={pool.name} className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                        <div>
-                          <div className="text-white font-semibold">{pool.name}</div>
-                          <div className="text-gray-400 text-sm">
-                            Reserve: {parseFloat(pool.reserve0).toFixed(1)} / {parseFloat(pool.reserve1).toFixed(1)}
-                          </div>
-                          <div className="text-gray-500 text-xs">
-                            LP: {pool.lpToken.slice(0, 6)}...{pool.lpToken.slice(-4)}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-green-300 font-semibold">${pool.tvl.toFixed(2)}</div>
-                          <div className="text-gray-400 text-sm">TVL</div>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="text-center py-4 text-sm text-green-500">
-                      ✅ Pools have liquidity - Ready for trading!
-                    </div>
-                  </div>
+              {activeTab === 'ai' && (
+                <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6 min-h-[520px]">
+                  <h2 className="text-2xl font-bold text-white mb-6">AI Assistant</h2>
+                  <DexAIAssistant 
+                    signer={signer}
+                    address={address}
+                    pools={pools}
+                    userLpBalances={userLpBalances}
+                    userBalances={Object.fromEntries(Object.entries(balances).map(([key, value]) => [key, value.toString()]))}
+                  />
                 </div>
-
-                {/* Quick Stats */}
-                <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
-                  <h3 className="text-xl font-bold text-white mb-4">Quick Stats</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-300">Total Pairs</span>
-                      <span className="text-white font-semibold">{pools.length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-300">Total TVL</span>
-                      <span className="text-white font-semibold">
-                        ${pools.reduce((sum, pool) => sum + pool.tvl, 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-300">24h Volume</span>
-                      <span className="text-white font-semibold">$0.00</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-300">DEX Contract</span>
-                      <span className="text-cyan-300 font-mono text-xs">0x3Db5...f0Ba</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contract Info */}
-                <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
-                  <h3 className="text-xl font-bold text-white mb-4">Contract Info</h3>
-                  <div className="space-y-3 text-sm text-gray-300">
-                    <div className="p-3 bg-white/5 rounded-lg">
-                      <div className="font-semibold text-green-300 mb-1">✅ DEX LIVE</div>
-                      <div className="text-xs">Fully operational on Polygon Amoy</div>
-                    </div>
-                    <div className="p-3 bg-white/5 rounded-lg">
-                      <div className="font-semibold text-green-300 mb-1">✅ Liquidity Added</div>
-                      <div className="text-xs">${pools.reduce((sum, pool) => sum + pool.tvl, 0).toFixed(2)} TVL across {pools.length} pairs</div>
-                    </div>
-                    <div className="p-3 bg-white/5 rounded-lg">
-                      <div className="font-semibold text-green-300 mb-1">✅ Ready for Trading</div>
-                      <div className="text-xs">Swap tokens and earn fees</div>
-                    </div>
-                    <div className="p-3 bg-white/5 rounded-lg">
-                      <a 
-                        href="https://amoy.polygonscan.com/address/0x3Db5A1C4bE6C21ceCaf3E74611Bd55F41651f0Ba" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="font-semibold text-blue-300 hover:text-blue-200 mb-1 block"
-                      >
-                        View on Explorer →
-                      </a>
-                      <div className="text-xs">0x3Db5...f0Ba</div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+              )}
+            </div>
           </motion.div>
         </AnimatePresence>
       </div>
