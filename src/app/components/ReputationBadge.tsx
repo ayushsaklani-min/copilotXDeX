@@ -4,7 +4,7 @@ import { ethers } from "ethers";
 import { useReputation } from "@/hooks/useReputation";
 
 export default function ReputationBadge(){
-  const [signer, setSigner] = React.useState<ethers.Signer | null>(null);
+  const [signer, setSigner] = React.useState<ethers.JsonRpcSigner | null>(null);
   const [address, setAddress] = React.useState<string>("");
 
   React.useEffect(() => {

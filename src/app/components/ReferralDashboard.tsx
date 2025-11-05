@@ -213,8 +213,8 @@ interface ReferralDashboardContentProps {
   setReferrerAddress: (addr: string) => void;
   isRegistering: boolean;
   status: { message: string; type: 'success' | 'error' | 'info' };
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  activeTab: 'overview' | 'referrals' | 'earnings' | 'tiers';
+  setActiveTab: (tab: 'overview' | 'referrals' | 'earnings' | 'tiers') => void;
   handleRegisterReferral: () => Promise<void>;
   copyReferralLink: () => Promise<void>;
   refreshData: () => Promise<void>;
@@ -336,7 +336,7 @@ function ReferralDashboardContent({
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as 'overview' | 'referrals' | 'earnings' | 'tiers')}
                 className={`flex-1 py-2 px-4 rounded-md transition-all ${
                   activeTab === tab.id
                     ? 'bg-cyan-500 text-white'

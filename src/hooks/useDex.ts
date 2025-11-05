@@ -136,7 +136,7 @@ export const useDex = (
         // Sum up volume from recent events
         for (const ev of events) {
           if (!('args' in ev) || ev.args === undefined) continue;
-          const { amountIn } = ev.args as { amountIn: bigint };
+          const { amountIn } = ev.args as unknown as { amountIn: bigint };
           if (ev.blockNumber === undefined) continue;
 
           try {

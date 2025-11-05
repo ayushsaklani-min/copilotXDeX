@@ -86,7 +86,7 @@ export default function Web3Copilot() {
           throw new Error('No provider available to fetch balances');
         }
 
-        let nativeBalanceWei;
+        let nativeBalanceWei: bigint = ethers.parseEther('0');
         let retryCount = 0;
         const maxRetries = 3;
 

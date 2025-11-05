@@ -28,9 +28,9 @@ export default function TokensPage() {
     getSigner();
   }, []);
 
-  const { createToken } = useTokenFactory(signer as unknown as ethers.Signer | null);
+  const { createToken } = useTokenFactory(signer);
 
-  const { score } = useReputation(signer as unknown as ethers.Signer | null, address || undefined);
+  const { score } = useReputation(signer, address || undefined);
 
   const provider = useMemo(() => {
     try {
