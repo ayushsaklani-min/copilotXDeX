@@ -2,5 +2,7 @@
 
 import FarmDashboard from '@/app/components/FarmDashboard';
 
-export default FarmDashboard;
+export default function FarmPage() {
+  return <FarmDashboard standalone={true} />;
+}
 
