@@ -10,7 +10,7 @@ interface SwapFormProps {
   isConnected: boolean;
   isCorrectNetwork: boolean;
   onStatusChange: (status: { message: string; type: string }) => void;
-  dex: { getAmountOut: (amount: number, tokenIn: string, tokenOut: string) => Promise<number>; swapTokens: (tokenIn: string, tokenOut: string, amount: number, to: string) => Promise<string> };
+  dex: { getAmountOut: (amount: number, tokenIn: string, tokenOut: string) => Promise<number>; swapTokens: (tokenIn: string, tokenOut: string, amountIn: number, amountOutMin: number, to: string) => Promise<string | null> };
   prices: Record<string, number>;
 }
 

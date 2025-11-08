@@ -25,7 +25,7 @@ export function useTokenFactory(signer: ethers.Signer | null) {
     const supplyWei = ethers.parseUnits(supply, 18);
     
     // Estimate gas first with retry logic
-    let gasEstimate: bigint;
+    let gasEstimate: bigint = 2000000n; // Default fallback
     let retryCount = 0;
     const maxRetries = 3;
     

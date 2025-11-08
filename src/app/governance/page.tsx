@@ -38,8 +38,8 @@ export default function GovernancePage() {
 
     // Listen for account changes
     const ext = getExternalProvider();
-    if (ext && 'on' in ext) {
-      ext.on('accountsChanged', async (accounts: string[]) => {
+    if (ext && 'on' in ext && typeof (ext as any).on === 'function') {
+      (ext as any).on('accountsChanged', async (accounts: string[]) => {
         if (accounts.length > 0) {
           const provider = new ethers.BrowserProvider(ext);
           const sgn = await provider.getSigner();
