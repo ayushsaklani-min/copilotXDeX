@@ -22,8 +22,8 @@ const getExternalProvider = (): EthereumProvider => {
 };
 
 const AMOY_CHAIN_ID = '0x13882';
-const AMOY_RPC_URL = process.env.NEXT_PUBLIC_AMOY_RPC_URL ?? '';
-const AMOY_FALLBACK_RPC_URL = process.env.NEXT_PUBLIC_AMOY_FALLBACK_RPC_URL ?? 'https://rpc-amoy.polygon.technology/';
+const AMOY_RPC_URL = process.env.NEXT_PUBLIC_AMOY_RPC_URL ?? 'https://rpc-amoy.polygon.technology/';
+const AMOY_FALLBACK_RPC_URL = process.env.NEXT_PUBLIC_AMOY_FALLBACK_RPC_URL ?? 'https://polygon-amoy.infura.io/v3/5b88739e5f9d4b828d0c2237429f0524';
 const GEMINI_API_URL = '/api/copilot';
 
 // Network configuration for Polygon Amoy only
@@ -31,7 +31,7 @@ const NETWORK = {
     chainIdDec: 80002,
     chainIdHex: AMOY_CHAIN_ID,
     name: 'Polygon Amoy',
-    rpcUrl: AMOY_RPC_URL || null,
+    rpcUrl: AMOY_RPC_URL,
     nativeSymbol: 'MATIC',
     wrappedSymbol: 'WMATIC',
     routerAddress: process.env.NEXT_PUBLIC_AMOY_ROUTER_ADDRESS || '0x1b02da8cb0d097eb8d57a175b88c7d8b47997506',
@@ -379,7 +379,7 @@ export default function Web3Copilot() {
             params: [{
               chainId: NETWORK.chainIdHex,
               chainName: NETWORK.name,
-              rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+              rpcUrls: [NETWORK.rpcUrl || AMOY_FALLBACK_RPC_URL],
               nativeCurrency: {
                 name: 'MATIC',
                 symbol: 'MATIC',
@@ -457,7 +457,7 @@ export default function Web3Copilot() {
                   params: [{
                     chainId: NETWORK.chainIdHex,
                     chainName: NETWORK.name,
-                    rpcUrls: ['https://rpc-amoy.polygon.technology/'],
+                    rpcUrls: [NETWORK.rpcUrl || AMOY_FALLBACK_RPC_URL],
                     nativeCurrency: {
                       name: 'MATIC',
                       symbol: 'MATIC',
@@ -600,6 +600,16 @@ export default function Web3Copilot() {
                   </a>
                   <p className="text-xs text-gray-400 text-center">
                     Earn XP by referring friends and unlock tier benefits.
+                  </p>
+                  
+                  <a
+                    href="/governance"
+                    className="w-full block py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-bold rounded-lg text-center transition-all duration-200 shadow-lg"
+                  >
+                    🏛️ Governance
+                  </a>
+                  <p className="text-xs text-gray-400 text-center">
+                    Vote on proposals and shape the future of TikTakDex.
                   </p>
                 </div>
               </div>

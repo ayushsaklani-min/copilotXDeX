@@ -112,5 +112,7 @@
   "referralAddress": "0x100bB5d61A85CA9fA905ea053c54ac3f59e05d3a",
   "farmAddress": "0xdaf321167e32E46b5C256d07Bd1a37eeb951597F",
   "farmRewardToken": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
-  "farmRewardPerSecond": "100000000000000000"
+  "farmRewardPerSecond": "100000000000000000",
+  "badgeAddress": "0x60b7bbBb35A04eE9627f6E862131E9C7C246Bc39",
+  "governanceAddress": "0xEC1e21ba8D831b3eAC77663f1e5b4c52906D3eFc"
 }

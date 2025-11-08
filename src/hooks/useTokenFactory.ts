@@ -23,7 +23,60 @@ export function useTokenFactory(signer: ethers.Signer | null) {
     if (!factory) throw new Error('No signer connected or factory address missing');
 
     const supplyWei = ethers.parseUnits(supply, 18);
-    const tx = await factory.createToken(name, symbol, supplyWei);
+    
+    // Estimate gas first with retry logic
+    let gasEstimate: bigint;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      try {
+        gasEstimate = await factory.createToken.estimateGas(name, symbol, supplyWei);
+        break; // Success
+      } catch (gasError: any) {
+        retryCount++;
+        console.warn(`Gas estimation attempt ${retryCount} failed:`, gasError);
+        
+        if (retryCount >= maxRetries) {
+          // If gas estimation fails, check for revert reason
+          if (gasError.reason) {
+            throw new Error(`Token creation would fail: ${gasError.reason}`);
+          }
+          if (gasError.data) {
+            throw new Error('Token creation would fail. Please check your inputs.');
+          }
+          // Use default gas if estimation fails but no clear error
+          gasEstimate = 2000000n; // Default for token creation (contract deployment)
+          break;
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      }
+    }
+    
+    // Execute transaction with proper gas settings
+    let tx;
+    try {
+      tx = await factory.createToken(name, symbol, supplyWei, {
+        gasLimit: gasEstimate + 50000n // Add buffer for contract deployment
+      });
+    } catch (txError: any) {
+      console.error('Token creation transaction failed:', txError);
+      
+      // Provide better error messages
+      if (txError.reason) {
+        throw new Error(`Token creation failed: ${txError.reason}`);
+      }
+      if (txError.code === 'ACTION_REJECTED' || txError.code === 4001) {
+        throw new Error('Transaction was rejected by user');
+      }
+      if (txError.message?.includes('Internal JSON-RPC error')) {
+        throw new Error('RPC error occurred. Please try again or check your network connection.');
+      }
+      throw new Error(txError.message || 'Token creation failed. Please try again.');
+    }
+    
     const receipt = await tx.wait();
 
     // Reputation handled on-chain by TokenFactory

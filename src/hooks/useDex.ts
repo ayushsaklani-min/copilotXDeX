@@ -39,7 +39,7 @@ interface UseDexReturn {
   error: string | null;
   getAmountOut: (amountIn: number, tokenIn: string, tokenOut: string) => Promise<number>;
   getAmountIn: (amountOut: number, tokenIn: string, tokenOut: string) => Promise<number>;
-  swapTokens: (tokenIn: string, tokenOut: string, amountIn: number, to: string) => Promise<string | null>;
+  swapTokens: (tokenIn: string, tokenOut: string, amountIn: number, amountOutMin: number, to: string) => Promise<string | null>;
   refreshData: () => Promise<void>;
 }
 
@@ -57,7 +57,18 @@ export const useDex = (
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const response = await fetch('/src/config/contracts.json');
+        // Try to import directly first (works in both dev and production)
+        try {
+          const config = await import('../config/contracts.json');
+          setContractConfig(config.default || config);
+          console.log('✅ Contract config loaded:', config.default || config);
+          return;
+        } catch (importErr) {
+          // Fallback to fetch if import fails
+        }
+        
+        // Fallback: try public path
+        const response = await fetch('/contracts.json');
         if (response.ok) {
           const config = await response.json();
           setContractConfig(config);
@@ -228,6 +239,7 @@ export const useDex = (
     tokenIn: string,
     tokenOut: string,
     amountIn: number,
+    amountOutMin: number,
     to: string
   ): Promise<string | null> => {
     if (!signer || !contractConfig) return null;
@@ -240,10 +252,13 @@ export const useDex = (
       );
 
       const amountInWei = ethers.parseEther(amountIn.toString());
+      const amountOutMinWei = ethers.parseEther(amountOutMin.toString());
+      
       const tx = await dexContract.swapExactTokensForTokens(
         tokenIn,
         tokenOut,
         amountInWei,
+        amountOutMinWei,
         to,
         {
           gasLimit: 250000

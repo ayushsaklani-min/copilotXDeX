@@ -8,6 +8,7 @@ import DexAIAssistant from './components/DexAIAssistant';
 import PoolAnalytics from './components/PoolAnalytics';
 import FarmDashboard from '../components/FarmDashboard';
 import ReferralDashboard from '../components/ReferralDashboard';
+import GovernanceDashboard from '../components/GovernanceDashboard';
 import { usePrices } from '../../hooks/usePrices';
 import contracts from '../../config/contracts.json';
 
@@ -24,7 +25,7 @@ const TOKENS = contracts.tokens as Record<string, string>;
 const DEX_ADDRESS = contracts.dexAddress as string;
 
 export default function DexPage() {
-  const [activeTab, setActiveTab] = useState<'swap' | 'liquidity' | 'analytics' | 'ai' | 'farming' | 'referrals'>('swap');
+  const [activeTab, setActiveTab] = useState<'swap' | 'liquidity' | 'analytics' | 'ai' | 'farming' | 'referrals' | 'governance'>('swap');
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -67,8 +68,8 @@ export default function DexPage() {
     chainId: 80002,
     chainIdHex: '0x13882',
     name: 'Polygon Amoy',
-    rpcUrl: process.env.NEXT_PUBLIC_AMOY_RPC_URL || 'https://polygon-amoy.infura.io/v3/5b88739e5f9d4b828d0c2237429f0524',
-    fallbackRpcUrl: process.env.NEXT_PUBLIC_AMOY_FALLBACK_RPC_URL || 'https://rpc-amoy.polygon.technology/',
+    rpcUrl: process.env.NEXT_PUBLIC_AMOY_RPC_URL || 'https://rpc-amoy.polygon.technology/',
+    fallbackRpcUrl: process.env.NEXT_PUBLIC_AMOY_FALLBACK_RPC_URL || 'https://polygon-amoy.infura.io/v3/5b88739e5f9d4b828d0c2237429f0524',
     explorerUrl: 'https://amoy.polygonscan.com/',
   };
 
@@ -388,64 +389,116 @@ export default function DexPage() {
 
   // Approve tokens with retry logic
   const handleApprove = useCallback(async () => {
-    if (!signer || !address) return;
+    if (!signer || !address || !fromAmount || parseFloat(fromAmount) <= 0) {
+      setStatus({ message: 'Enter a valid amount before approving.', type: 'error' });
+      return;
+    }
 
     let retryCount = 0;
     const maxRetries = 3;
 
     while (retryCount < maxRetries) {
       try {
-        const erc20Abi = ['function approve(address, uint256) returns (bool)'];
+        const erc20Abi = [
+          'function approve(address, uint256) returns (bool)',
+          'function allowance(address, address) view returns (uint256)',
+          'function decimals() view returns (uint8)'
+        ];
         const contract = new ethers.Contract(TOKENS[fromToken as keyof typeof TOKENS], erc20Abi, signer);
-        
-        const amountWei = ethers.parseEther(fromAmount);
-        
-        // Estimate gas first
-        let gasEstimate;
+
+        let decimals = 18;
+        try {
+          decimals = await contract.decimals();
+        } catch (decError) {
+          console.warn('Failed to fetch token decimals, defaulting to 18:', decError);
+        }
+
+        const amountWei = ethers.parseUnits(fromAmount, decimals);
+
+        // Check existing allowance to avoid unnecessary transactions
+        let currentAllowance = 0n;
+        try {
+          currentAllowance = await contract.allowance(address, DEX_ADDRESS);
+        } catch (allowError) {
+          console.warn('Failed to fetch allowance:', allowError);
+        }
+
+        if (currentAllowance >= amountWei) {
+          setIsApproved(true);
+          setStatus({ message: `${fromToken} is already approved for this amount.`, type: 'success' });
+          break;
+        }
+
+        // Some tokens require allowance reset to zero before setting a new value
+        if (currentAllowance > 0n) {
+          try {
+            let resetGas = 60000n;
+            try {
+              resetGas = await contract.approve.estimateGas(DEX_ADDRESS, 0n);
+            } catch (resetGasError) {
+              console.warn('Allowance reset gas estimation failed, using default:', resetGasError);
+            }
+            const resetTx = await contract.approve(DEX_ADDRESS, 0n, {
+              gasLimit: resetGas + 10000n
+            });
+            await resetTx.wait();
+          } catch (resetError: any) {
+            console.error('Failed to reset allowance:', resetError);
+            throw resetError;
+          }
+        }
+
+        // Estimate gas for approval
+        let gasEstimate = 100000n;
         try {
           gasEstimate = await contract.approve.estimateGas(DEX_ADDRESS, amountWei);
-        } catch (gasError) {
-          console.warn('Gas estimation failed, using default:', gasError);
-          gasEstimate = 100000n; // Default gas limit
+        } catch (gasError: any) {
+          console.warn('Gas estimation for approval failed:', gasError);
+          if (gasError.reason || gasError.code === 'CALL_EXCEPTION') {
+            throw new Error(gasError.reason || 'Approval would fail. Check balances and try again.');
+          }
         }
-        
+
         const tx = await contract.approve(DEX_ADDRESS, amountWei, {
-          gasLimit: gasEstimate + 10000n // Add buffer
+          gasLimit: gasEstimate + 20000n // Add buffer
         });
-        
+
         const receipt = await tx.wait();
-        
-        if (receipt) {
+
+        if (receipt && receipt.status === 1) {
           setIsApproved(true);
           setStatus({ message: `${fromToken} approved successfully!`, type: 'success' });
           break; // Success, exit retry loop
+        } else {
+          throw new Error('Approval transaction failed.');
         }
       } catch (error: any) {
         retryCount++;
         console.warn(`Approval attempt ${retryCount} failed:`, error);
-        
-        if (error.message?.includes('Internal JSON-RPC error') ||
-            error.message?.includes('could not coalesce error') ||
-            error.message?.includes('user rejected')) {
-          if (retryCount < maxRetries && !error.message?.includes('user rejected')) {
-            console.log(`Retrying approval in ${retryCount * 1000}ms...`);
-            await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
-            continue;
-          } else {
-            console.error('Approval failed after retries:', error);
-            setStatus({ 
-              message: error.message?.includes('user rejected') 
-                ? 'Transaction was rejected by user' 
-                : 'Failed to approve token. Please try again.', 
-              type: 'error' 
-            });
-            break;
-          }
-        } else {
-          console.error('Error approving token:', error);
-          setStatus({ message: 'Failed to approve token', type: 'error' });
+
+        // User rejected the transaction
+        if (error.code === 'ACTION_REJECTED' || error.code === 4001 || error.message?.includes('user rejected')) {
+          setStatus({ message: 'Transaction was rejected by user', type: 'error' });
           break;
         }
+
+        if (retryCount < maxRetries) {
+          console.log(`Retrying approval in ${retryCount * 1000}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
+          continue;
+        }
+
+        // Provide detailed error feedback
+        if (error.reason) {
+          setStatus({ message: `Approval failed: ${error.reason}`, type: 'error' });
+        } else if (error.error?.message) {
+          setStatus({ message: `Approval failed: ${error.error.message}`, type: 'error' });
+        } else if (error.message?.includes('Internal JSON-RPC error')) {
+          setStatus({ message: 'RPC error during approval. Please try again or switch RPC provider.', type: 'error' });
+        } else {
+          setStatus({ message: error.message || 'Failed to approve token. Please try again.', type: 'error' });
+        }
+        break;
       }
     }
   }, [signer, address, fromAmount, fromToken, setStatus]);
@@ -463,11 +516,32 @@ export default function DexPage() {
     while (retryCount < maxRetries) {
       try {
         const dexAbi = [
-          "function swapExactTokensForTokens(address tokenIn, address tokenOut, uint256 amountIn, address to) external returns (uint256)",
+          "function swapExactTokensForTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin, address to) external returns (uint256)",
+          "function getAmountOut(uint256 amountIn, address tokenIn, address tokenOut) external view returns (uint256)",
         ];
         
         const dex = new ethers.Contract(DEX_ADDRESS, dexAbi, signer);
         const amountInWei = ethers.parseEther(fromAmount);
+        
+        // Recalculate amountOut in wei to ensure accuracy
+        let amountOutWei: bigint;
+        try {
+          amountOutWei = await dex.getAmountOut(
+            amountInWei,
+            TOKENS[fromToken as keyof typeof TOKENS],
+            TOKENS[toToken as keyof typeof TOKENS]
+          );
+        } catch (calcError) {
+          console.error('Failed to calculate amount out:', calcError);
+          throw new Error('Failed to calculate swap output. Please try again.');
+        }
+        
+        // Calculate minimum amount out with 0.5% slippage tolerance (in wei)
+        const slippageTolerance = 0.005; // 0.5%
+        // Apply slippage: amountOutMin = amountOut * (1 - slippage)
+        // Use BigInt arithmetic to avoid precision loss
+        const slippageBps = BigInt(Math.floor(slippageTolerance * 10000)); // 50 = 0.5%
+        const amountOutMinWei = (amountOutWei * (10000n - slippageBps)) / 10000n;
         
         // Estimate gas first
         let gasEstimate;
@@ -476,10 +550,15 @@ export default function DexPage() {
             TOKENS[fromToken as keyof typeof TOKENS],
             TOKENS[toToken as keyof typeof TOKENS],
             amountInWei,
+            amountOutMinWei,
             address
           );
-        } catch (gasError) {
-          console.warn('Gas estimation failed, using default:', gasError);
+        } catch (gasError: any) {
+          console.warn('Gas estimation failed:', gasError);
+          // If gas estimation fails, check if it's a revert reason
+          if (gasError.reason || gasError.data) {
+            throw new Error(gasError.reason || 'Transaction would fail. Check token approval and balances.');
+          }
           gasEstimate = 300000n; // Default gas limit for swaps
         }
         
@@ -487,6 +566,7 @@ export default function DexPage() {
           TOKENS[fromToken as keyof typeof TOKENS],
           TOKENS[toToken as keyof typeof TOKENS],
           amountInWei,
+          amountOutMinWei,
           address,
           {
             gasLimit: gasEstimate + 20000n // Add buffer
@@ -495,18 +575,8 @@ export default function DexPage() {
         
         const receipt = await tx.wait();
 
-        // Attempt reputation +1 here too for direct DEX swaps page (defensive duplicate)
-        try {
-          const { REPUTATION_ABI, REPUTATION_ADDRESS } = await import("../../constants/reputation");
-          const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
-          if (repAddr) {
-            const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
-            await rep.updateScore(address, 1);
-            console.log('Reputation +1 for swap');
-          }
-        } catch (e) {
-          console.warn('Reputation update swap failed', e);
-        }
+        // Reputation is automatically updated by the DEX contract on-chain
+        // No need for manual update - the contract handles it via _awardReputation
         
         setStatus({ 
           message: `Swap successful! TX: ${receipt.hash.slice(0, 10)}...`, 
@@ -522,28 +592,58 @@ export default function DexPage() {
         retryCount++;
         console.warn(`Swap attempt ${retryCount} failed:`, error);
         
+        // Handle user rejection
+        if (error.code === 'ACTION_REJECTED' || error.code === 4001 || error.message?.includes('user rejected')) {
+          setStatus({ 
+            message: 'Transaction was rejected by user', 
+            type: 'error' 
+          });
+          break;
+        }
+        
+        // Handle RPC errors with retry
         if (error.message?.includes('Internal JSON-RPC error') ||
             error.message?.includes('could not coalesce error') ||
-            error.message?.includes('user rejected')) {
-          if (retryCount < maxRetries && !error.message?.includes('user rejected')) {
+            error.message?.includes('network') ||
+            error.message?.includes('timeout')) {
+          if (retryCount < maxRetries) {
             console.log(`Retrying swap in ${retryCount * 1000}ms...`);
             await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
             continue;
           } else {
-            console.error('Swap failed after retries:', error);
             setStatus({ 
-              message: error.message?.includes('user rejected') 
-                ? 'Transaction was rejected by user' 
-                : `Swap failed: ${error.message || 'Unknown error'}. Please try again.`, 
+              message: 'Network error. Please check your connection and try again.', 
               type: 'error' 
             });
             break;
           }
-        } else {
-          console.error('Error executing swap:', error);
-          setStatus({ message: `Swap failed: ${error.message || 'Unknown error'}`, type: 'error' });
+        }
+        
+        // Handle transaction revert
+        if (error.reason || error.data || error.code === 'CALL_EXCEPTION') {
+          let errorMsg = 'Swap failed. ';
+          if (error.reason) {
+            errorMsg += error.reason;
+          } else if (error.message?.includes('INSUFFICIENT_OUTPUT_AMOUNT')) {
+            errorMsg += 'Slippage too high. Try increasing slippage tolerance or reducing amount.';
+          } else if (error.message?.includes('INSUFFICIENT_LIQUIDITY')) {
+            errorMsg += 'Insufficient liquidity in pool.';
+          } else if (error.message?.includes('PAIR_NOT_EXISTS')) {
+            errorMsg += 'Trading pair does not exist.';
+          } else {
+            errorMsg += 'Check token approval and balances.';
+          }
+          setStatus({ message: errorMsg, type: 'error' });
           break;
         }
+        
+        // Generic error
+        console.error('Error executing swap:', error);
+        setStatus({ 
+          message: `Swap failed: ${error.message || 'Unknown error. Please try again.'}`, 
+          type: 'error' 
+        });
+        break;
       }
     }
     
@@ -661,18 +761,8 @@ export default function DexPage() {
         type: 'success' 
       });
 
-      // Attempt reputation +2 for successful add-liquidity
-      try {
-        const { REPUTATION_ABI, REPUTATION_ADDRESS } = await import("../../constants/reputation");
-        const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
-        if (repAddr && signer && address) {
-          const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
-          await rep.updateScore(address, 2);
-          console.log('Reputation +2 for liquidity add');
-        }
-      } catch (e) {
-        console.warn('Reputation update liquidity failed', e);
-      }
+      // Reputation is automatically updated by the DEX contract on-chain
+      // No need for manual update - the contract handles it via _awardReputation
       
       // Reset form
       setAmountA('');
@@ -782,6 +872,7 @@ export default function DexPage() {
     { id: 'liquidity', label: 'Liquidity', icon: '💧' },
     { id: 'farming', label: 'Farming', icon: '🌾' },
     { id: 'referrals', label: 'Referrals', icon: '👥' },
+    { id: 'governance', label: 'Governance', icon: '🏛️' },
     { id: 'analytics', label: 'Analytics', icon: '📊' },
     { id: 'ai', label: 'AI Assistant', icon: '🤖' },
   ] as const;
@@ -1219,6 +1310,16 @@ export default function DexPage() {
                  {activeTab === 'referrals' && (
                    <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
                      <ReferralDashboard
+                       standalone={false}
+                       signer={signer}
+                       address={address}
+                     />
+                   </div>
+                 )}
+
+                 {activeTab === 'governance' && (
+                   <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-cyan-500/30 p-6">
+                     <GovernanceDashboard
                        standalone={false}
                        signer={signer}
                        address={address}

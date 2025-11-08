@@ -148,10 +148,15 @@ export default function SwapForm({
     onStatusChange({ message: 'Executing swap...', type: 'info' });
 
     try {
+      // Calculate minimum amount out with 0.5% slippage tolerance
+      const slippageTolerance = 0.005; // 0.5%
+      const amountOutMin = parseFloat(toAmount) * (1 - slippageTolerance);
+      
       const txHash = await dex.swapTokens(
         TOKENS[fromToken as keyof typeof TOKENS],
         TOKENS[toToken as keyof typeof TOKENS],
         parseFloat(fromAmount),
+        amountOutMin,
         address
       );
 

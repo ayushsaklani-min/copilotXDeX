@@ -499,16 +499,9 @@ export default function TokenSwap({
 
       onStatusChange({ message: 'Swap successful!', type: 'success' });
 
-      // Best-effort XP: +1 for swap via router flows
-      try {
-        if (address) {
-          const repAddr = (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('reputationAddress')) || REPUTATION_ADDRESS;
-          if (repAddr) {
-            const rep = new ethers.Contract(repAddr, REPUTATION_ABI, signer);
-            await rep.updateScore(address, 1);
-          }
-        }
-      } catch {}
+      // Reputation is automatically updated by the DEX contract on-chain
+      // No need for manual update - the contract handles it via _awardReputation
+      
       await onBalancesRefresh();
     } catch (error) {
       console.error("Swap failed", error);

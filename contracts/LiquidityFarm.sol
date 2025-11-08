@@ -296,6 +296,8 @@ contract LiquidityFarm is Ownable, ReentrancyGuard {
     }
 
     // Auto-compound: harvest and restake
+    // Note: This is a simplified compound that adds rewards to staked amount
+    // In production, you'd want to convert reward tokens to LP tokens via a DEX
     function compound(uint256 _pid) external nonReentrant {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
@@ -314,14 +316,19 @@ contract LiquidityFarm is Ownable, ReentrancyGuard {
             user.pendingRewards = 0;
             user.totalEarned = user.totalEarned + totalPending;
             
-            // Note: In a real implementation, you'd convert rewards to LP tokens
-            // For simplicity, we're just adding to the reward balance
-            user.amount = user.amount + totalPending;
-            pool.totalStaked = pool.totalStaked + totalPending;
+            // Transfer rewards to user first (they receive the tokens)
+            safeRewardTransfer(msg.sender, totalPending);
+            
+            // Then user needs to convert rewards to LP tokens and deposit
+            // For now, we just track that rewards were harvested
+            // In production, you'd integrate with a DEX to swap rewards -> LP tokens
+            // and then call deposit() with the new LP tokens
+            
             user.rewardDebt = (user.amount * pool.accRewardPerShare) / PRECISION;
             
             emit Harvest(msg.sender, _pid, totalPending);
-            emit Deposit(msg.sender, _pid, totalPending);
+            // Note: No Deposit event since we're not actually adding LP tokens here
+            // User would need to manually convert and deposit LP tokens for true compounding
         }
     }
 

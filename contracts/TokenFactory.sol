@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-interface IReputationTF {
+interface IReputation {
     function updateScore(address user, uint256 points) external;
 }
 
@@ -33,7 +33,7 @@ contract TokenFactory is Ownable {
         emit TokenCreated(address(token), name_, symbol_, initialSupply_, msg.sender);
         // Award reputation points for token creation (+5 XP)
         if (reputationContract != address(0)) {
-            try IReputationTF(reputationContract).updateScore(msg.sender, 5) {
+            try IReputation(reputationContract).updateScore(msg.sender, 5) {
             } catch {}
         }
         return address(token);

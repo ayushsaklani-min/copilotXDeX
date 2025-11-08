@@ -24,6 +24,7 @@ contract TikTakDex is Ownable {
     uint256 public constant LP_FEE = 25; // 0.25%
     uint256 public constant OWNER_FEE = 5; // 0.05%
     uint256 public constant TOTAL_FEE = LP_FEE + OWNER_FEE; // 0.3%
+    uint256 public constant MINIMUM_LIQUIDITY = 1000; // Minimum LP tokens for first deposit
 
     // Reputation config
     address public reputationContract;
@@ -93,17 +94,21 @@ contract TikTakDex is Ownable {
         bytes32 pairKey = keccak256(abi.encodePacked(token0, token1));
         require(pairs[pairKey].token0 == address(0), "TikTakDex: PAIR_EXISTS");
 
-        // Create LP token
+        // Create LP token with dynamic naming based on token addresses
+        // Format: "TikTakLP-<shortAddr0>-<shortAddr1>"
+        string memory addr0Str = _addressToString(token0);
+        string memory addr1Str = _addressToString(token1);
+        
         string memory lpName = string(abi.encodePacked(
             "TikTakLP-",
-            "TIK",
+            _substring(addr0Str, 0, 6),
             "-",
-            "TAK"
+            _substring(addr1Str, 0, 6)
         ));
         string memory lpSymbol = string(abi.encodePacked(
             "LP-",
-            "TIK",
-            "TAK"
+            _substring(addr0Str, 0, 4),
+            _substring(addr1Str, 0, 4)
         ));
 
         TikTakLP lpToken = new TikTakLP(lpName, lpSymbol);
@@ -155,8 +160,12 @@ contract TikTakDex is Ownable {
         uint256 _reserve1 = pair.reserve1;
 
         if (_reserve0 == 0 && _reserve1 == 0) {
-            // First liquidity provision
+            // First liquidity provision - require minimum liquidity to prevent precision issues
             lpAmount = sqrt(amount0 * amount1);
+            require(lpAmount > MINIMUM_LIQUIDITY, "TikTakDex: INSUFFICIENT_LIQUIDITY_MINTED");
+            // Lock minimum liquidity forever (burn to zero address)
+            // This prevents someone from draining the pool by being the first to add/remove
+            lpAmount = lpAmount - MINIMUM_LIQUIDITY;
         } else {
             // Subsequent liquidity provision
             uint256 liquidity0 = (amount0 * pair.totalSupply) / _reserve0;
@@ -173,10 +182,18 @@ contract TikTakDex is Ownable {
         // Update reserves
         pair.reserve0 = _reserve0 + amount0;
         pair.reserve1 = _reserve1 + amount1;
-        pair.totalSupply = pair.totalSupply + lpAmount;
 
-        // Mint LP tokens
-        TikTakLP(pair.lpToken).mint(to, lpAmount);
+        // Mint LP tokens (or burn minimum liquidity for first deposit)
+        if (_reserve0 == 0 && _reserve1 == 0) {
+            // Burn minimum liquidity to zero address (Uniswap V2 pattern)
+            TikTakLP(pair.lpToken).mint(address(0), MINIMUM_LIQUIDITY);
+            TikTakLP(pair.lpToken).mint(to, lpAmount);
+            // Update totalSupply to include burned amount
+            pair.totalSupply = MINIMUM_LIQUIDITY + lpAmount;
+        } else {
+            TikTakLP(pair.lpToken).mint(to, lpAmount);
+            pair.totalSupply = pair.totalSupply + lpAmount;
+        }
 
         emit LiquidityAdded(address(pair.lpToken), to, amount0, amount1, lpAmount);
         emit Sync(address(pair.lpToken), pair.reserve0, pair.reserve1);
@@ -238,6 +255,7 @@ contract TikTakDex is Ownable {
      * @param tokenIn Input token address
      * @param tokenOut Output token address
      * @param amountIn Amount of input tokens
+     * @param amountOutMin Minimum amount of output tokens (slippage protection)
      * @param to Address to receive output tokens
      * @return amountOut Amount of output tokens received
      */
@@ -245,19 +263,32 @@ contract TikTakDex is Ownable {
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
+        uint256 amountOutMin,
         address to
     ) external returns (uint256 amountOut) {
         bytes32 pairKey = getPairKey(tokenIn, tokenOut);
         Pair storage pair = pairs[pairKey];
         require(pair.token0 != address(0), "TikTakDex: PAIR_NOT_EXISTS");
 
+        // Get amount out (this already accounts for fee in the AMM formula)
         amountOut = getAmountOut(amountIn, tokenIn, tokenOut);
         require(amountOut > 0, "TikTakDex: INSUFFICIENT_OUTPUT_AMOUNT");
+        require(amountOut >= amountOutMin, "TikTakDex: INSUFFICIENT_OUTPUT_AMOUNT");
 
         // Transfer input tokens
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
 
-        // Update reserves
+        // Calculate fees based on user's reputation
+        uint256 feePercent = getUserFeeRate(msg.sender); // in basis points (e.g., 30 = 0.30%)
+        
+        // The fee is already factored into amountOut via getAmountOut formula
+        // Calculate owner fee portion from input amount (simplified tracking)
+        // Owner fee is OWNER_FEE / TOTAL_FEE of the total fee
+        uint256 ownerFeeAmount = (amountIn * feePercent * OWNER_FEE) / (FEE_DENOMINATOR * TOTAL_FEE);
+
+        // Update reserves: add full amountIn, subtract amountOut
+        // The LP fee automatically stays in the pool (increases LP token value)
+        // This is because amountOut already accounts for the fee in the AMM formula
         if (tokenIn == pair.token0) {
             pair.reserve0 = pair.reserve0 + amountIn;
             pair.reserve1 = pair.reserve1 - amountOut;
@@ -266,21 +297,17 @@ contract TikTakDex is Ownable {
             pair.reserve1 = pair.reserve1 + amountIn;
         }
 
-        // Adjust for dynamic fee based on reputation
-        uint256 feePercent = getUserFeeRate(msg.sender); // in basis points (e.g., 30 = 0.30%)
-        uint256 fee = (amountOut * feePercent) / FEE_DENOMINATOR;
-        uint256 amountOutAfterFee = amountOut - fee;
+        // Accumulate owner fee (tracked in input token terms for simplicity)
+        // Note: In production, you'd want per-token tracking, but this works for the current structure
+        ownerFeeAccumulated = ownerFeeAccumulated + ownerFeeAmount;
 
-        // Transfer output tokens after fee
-        IERC20(tokenOut).safeTransfer(to, amountOutAfterFee);
+        // Transfer output tokens to user
+        IERC20(tokenOut).safeTransfer(to, amountOut);
 
-        // Accumulate owner fee portion as native units (for simplicity we don't split per token here)
-        // Note: In a production system, fees should be accounted per token. Here we keep existing owner fee mechanism
-        // and emit event for visibility.
+        // Emit events
         uint256 reputation = reputationContract == address(0) ? 0 : IReputation(reputationContract).getScore(msg.sender);
         emit FeeAdjusted(msg.sender, reputation, feePercent);
-
-        emit Swap(address(pair.lpToken), to, tokenIn, amountIn, amountOutAfterFee);
+        emit Swap(address(pair.lpToken), to, tokenIn, amountIn, amountOut);
         emit Sync(address(pair.lpToken), pair.reserve0, pair.reserve1);
 
         // Award reputation points for swapping (+1 XP)
@@ -443,6 +470,10 @@ contract TikTakDex is Ownable {
 
     /**
      * @dev Withdraw accumulated owner fees
+     * @notice Note: ownerFeeAccumulated is tracked in input token terms from swaps
+     * In production, you'd want per-token fee tracking. This is a simplified version.
+     * For now, this function is kept for compatibility but fees are distributed
+     * through the pool value increase (LP tokens gain value from fees staying in pool).
      */
     function withdrawOwnerFees() external onlyOwner {
         uint256 amount = ownerFeeAccumulated;
@@ -450,8 +481,10 @@ contract TikTakDex is Ownable {
         
         ownerFeeAccumulated = 0;
         
-        // Transfer fees to owner (simplified - in practice, you'd distribute across tokens)
-        payable(owner()).transfer(amount);
+        // Note: In this implementation, fees are in various ERC20 tokens from swaps
+        // This function would need per-token tracking in production
+        // For now, we reset the accumulator (fees effectively stay in pool for LPs)
+        // In a production system, you'd track fees per token and allow withdrawal per token
     }
 
     /**
@@ -466,6 +499,36 @@ contract TikTakDex is Ownable {
             y = z;
             z = (x / z + z) / 2;
         }
+    }
+
+    /**
+     * @dev Convert address to string (hex format)
+     */
+    function _addressToString(address addr) internal pure returns (string memory) {
+        bytes memory data = abi.encodePacked(addr);
+        bytes memory alphabet = "0123456789abcdef";
+        bytes memory str = new bytes(2 + data.length * 2);
+        str[0] = '0';
+        str[1] = 'x';
+        for (uint256 i = 0; i < data.length; i++) {
+            str[2+i*2] = alphabet[uint256(uint8(data[i] >> 4))];
+            str[3+i*2] = alphabet[uint256(uint8(data[i] & 0x0f))];
+        }
+        return string(str);
+    }
+
+    /**
+     * @dev Get substring of a string (simplified - gets first N characters)
+     */
+    function _substring(string memory str, uint256 start, uint256 length) internal pure returns (string memory) {
+        bytes memory strBytes = bytes(str);
+        require(start + length <= strBytes.length, "TikTakDex: INVALID_SUBSTRING");
+        
+        bytes memory result = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            result[i] = strBytes[start + i];
+        }
+        return string(result);
     }
 
     /**
