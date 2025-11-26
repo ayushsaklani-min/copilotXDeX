@@ -900,14 +900,7 @@ export default function DexPage() {
             </div>
             
             <div className="flex items-center space-x-4">
-              {!isConnected ? (
-                <button
-                  onClick={connectWallet}
-                  className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold rounded-lg hover:from-cyan-600 hover:to-blue-600 transition-all duration-200 shadow-lg"
-                >
-                  Connect Wallet
-                </button>
-              ) : (
+              {isConnected && (
                 <div className="flex items-center space-x-3">
                   <div className="text-right">
                     <div className="text-sm text-gray-300">Connected</div>
