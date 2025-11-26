@@ -1,0 +1,21 @@
+{
+  "timestamp": "2025-10-13T21:48:06.914Z",
+  "network": "polygon-amoy",
+  "chainId": 80002,
+  "contracts": {
+    "TikTakDex": "0x860CFfF6364cE7cC76AbD003834e642Fa07a20E3",
+    "Reputation": "0xf77AA837587dc07FE822C5CB0B3D5BF5294CaB42",
+    "TIK-TAK_LP": "0x235b7Cb52BbF354f7dE866a7C4da7Ab9f97E1417",
+    "TIK-TOE_LP": "0x4583E86B912f13826F6454bfB88E5CeD86f9090a",
+    "TAK-TOE_LP": "0x82ca215a26755153a67C9cf50DeB4873bF91531C"
+  },
+  "tokens": {
+    "TIK": "0xf0dc4aa8063810B4116091371a74D55856c9Fa87",
+    "TAK": "0x9222709Ea62bcD6F7E17281FC10ECE96DC2CAEd3",
+    "TOE": "0xfe8aad1E21b682ef70eA1764D80A9BeBcF1a2dbc"
+  },
+  "explorer": "https://amoy.polygonscan.com/",
+  "xpRewards": "0x1B869035546A16cBE7825EDb262ec2652A8dF11a",
+  "coinflip": "0x835C0aD02c1a81bEF7eAc7340267ba182F1Db1D7",
+  "gamesDeployedAt": "2025-11-25T18:17:46.582Z"
+}

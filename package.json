@@ -9,6 +9,12 @@
     "lint": "eslint",
     "compile": "npx hardhat compile",
     "deploy:amoy": "npx hardhat run --network amoy scripts/deploy.js",
+    "deploy:bonding": "npx hardhat run --network amoy scripts/deploy-bonding.js",
+    "deploy:security": "npx hardhat run --network amoy scripts/deploy-security.js",
+    "deploy:social": "npx hardhat run --network amoy scripts/deploy-social.js",
+    "deploy:games": "npx hardhat run --network amoy scripts/deploy-games.js",
+    "deploy:all": "npx hardhat run --network amoy scripts/deploy-all.js",
+    "deploy:complete": "npm run compile && npm run deploy:all",
     "set:reputation": "REPUTATION_ADDRESS=0x07535D0f538689918901e53bC8ab25bb7ee66237 npx hardhat run --network amoy scripts/setReputation.js",
     "test": "npx hardhat test",
     "test:coverage": "npx hardhat coverage",
@@ -25,7 +31,11 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "viem": "^2.37.11",
-    "wagmi": "^2.17.5"
+    "wagmi": "^2.17.5",
+    "zustand": "^4.5.0",
+    "socket.io-client": "^4.7.0",
+    "date-fns": "^3.0.0",
+    "clsx": "^2.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
