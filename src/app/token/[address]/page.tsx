@@ -14,6 +14,8 @@ export default function TokenPage({ params }: any) {
   const tokenAddress = params.address as `0x${string}`;
   const { address: userAddress } = useAccount();
   const { tokenInfo } = useGetTokenInfo(tokenAddress);
+  // Loosely type on-chain token stats to avoid TS complaining about dynamic contract return shape
+  const tokenStats = tokenInfo as any;
   const [buyAmount, setBuyAmount] = useState('');
   const [sellAmount, setSellAmount] = useState('');
   
@@ -191,25 +193,25 @@ export default function TokenPage({ params }: any) {
                 <div className="flex justify-between">
                   <span className="text-neutral-400">Market Cap</span>
                   <span className="text-white font-mono">
-                    {tokenInfo?.marketCap ? `${Number(formatEther(tokenInfo.marketCap)).toFixed(2)} MATIC` : '0'}
+                    {tokenStats?.marketCap ? `${Number(formatEther(tokenStats.marketCap)).toFixed(2)} MATIC` : '0'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-400">TVL</span>
                   <span className="text-white font-mono">
-                    {tokenInfo?.tvl ? `${Number(formatEther(tokenInfo.tvl)).toFixed(2)} MATIC` : '0'}
+                    {tokenStats?.tvl ? `${Number(formatEther(tokenStats.tvl)).toFixed(2)} MATIC` : '0'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-400">Total Volume</span>
                   <span className="text-white font-mono">
-                    {tokenInfo?.totalVolume ? `${Number(formatEther(tokenInfo.totalVolume)).toFixed(2)} MATIC` : '0'}
+                    {tokenStats?.totalVolume ? `${Number(formatEther(tokenStats.totalVolume)).toFixed(2)} MATIC` : '0'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-400">Curve Type</span>
                   <span className="text-white font-mono">
-                    {tokenInfo?.curveType === 0 ? 'Linear' : tokenInfo?.curveType === 1 ? 'Exponential' : 'Sigmoid'}
+                    {tokenStats?.curveType === 0 ? 'Linear' : tokenStats?.curveType === 1 ? 'Exponential' : 'Sigmoid'}
                   </span>
                 </div>
               </div>

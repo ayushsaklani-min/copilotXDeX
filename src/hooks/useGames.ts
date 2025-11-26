@@ -22,12 +22,14 @@ export function useCoinflipStats() {
     },
   });
 
+  const rawStats = stats as any[] | undefined;
+
   return {
-    wins: stats ? Number(stats[0]) : 0,
-    losses: stats ? Number(stats[1]) : 0,
-    wagered: stats ? stats[2].toString() : '0',
-    won: stats ? stats[3].toString() : '0',
-    gamesPlayed: stats ? Number(stats[4]) : 0,
+    wins: rawStats ? Number(rawStats[0]) : 0,
+    losses: rawStats ? Number(rawStats[1]) : 0,
+    wagered: rawStats ? rawStats[2].toString() : '0',
+    won: rawStats ? rawStats[3].toString() : '0',
+    gamesPlayed: rawStats ? Number(rawStats[4]) : 0,
   };
 }
 
@@ -66,13 +68,15 @@ export function useMinesGameState() {
     },
   });
 
+  const rawGameState = gameState as any[] | undefined;
+
   return {
-    isActive: gameState ? gameState[0] : false,
-    betAmount: gameState ? gameState[1].toString() : '0',
-    minesCount: gameState ? Number(gameState[2]) : 0,
-    tilesRevealed: gameState ? Number(gameState[3]) : 0,
-    currentMultiplier: gameState ? Number(gameState[4]) : 100,
-    revealedTiles: gameState ? gameState[5] : [],
+    isActive: rawGameState ? rawGameState[0] : false,
+    betAmount: rawGameState ? rawGameState[1].toString() : '0',
+    minesCount: rawGameState ? Number(rawGameState[2]) : 0,
+    tilesRevealed: rawGameState ? Number(rawGameState[3]) : 0,
+    currentMultiplier: rawGameState ? Number(rawGameState[4]) : 100,
+    revealedTiles: rawGameState ? rawGameState[5] : [],
     refetch,
   };
 }
@@ -151,15 +155,17 @@ export function useUserXP() {
     },
   });
 
+  const rawXP = xpData as any[] | undefined;
+
   return {
-    totalXP: xpData ? Number(xpData[0]) : 0,
-    gameXP: xpData ? Number(xpData[1]) : 0,
-    tradingXP: xpData ? Number(xpData[2]) : 0,
-    socialXP: xpData ? Number(xpData[3]) : 0,
-    level: xpData ? Number(xpData[4]) : 0,
-    streak: xpData ? Number(xpData[5]) : 0,
-    lastActivityDate: xpData ? Number(xpData[6]) : 0,
-    multiplier: xpData ? Number(xpData[7]) : 100,
+    totalXP: rawXP ? Number(rawXP[0]) : 0,
+    gameXP: rawXP ? Number(rawXP[1]) : 0,
+    tradingXP: rawXP ? Number(rawXP[2]) : 0,
+    socialXP: rawXP ? Number(rawXP[3]) : 0,
+    level: rawXP ? Number(rawXP[4]) : 0,
+    streak: rawXP ? Number(rawXP[5]) : 0,
+    lastActivityDate: rawXP ? Number(rawXP[6]) : 0,
+    multiplier: rawXP ? Number(rawXP[7]) : 100,
   };
 }
 

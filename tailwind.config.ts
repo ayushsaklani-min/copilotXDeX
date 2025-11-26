@@ -145,12 +145,13 @@ const config: Config = {
         lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
         xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         '2xl': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        // Custom glow shadows; cast to any to satisfy Tailwind's stricter TS types
         glow: {
           primary: '0 0 20px rgba(14, 165, 233, 0.5)',
           secondary: '0 0 20px rgba(217, 70, 239, 0.5)',
           success: '0 0 20px rgba(34, 197, 94, 0.5)',
           error: '0 0 20px rgba(239, 68, 68, 0.5)',
-        },
+        } as any,
       },
       keyframes: {
         fadeIn: {

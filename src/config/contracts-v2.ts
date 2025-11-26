@@ -20,7 +20,9 @@ export const contractAddresses = {
   liquidityController: '0xFc76109Fbe3a78c97808A20c9b62177756a05930',
   socialGraph: '0xe1705bEF589bdcAb37fA47786af81b97275aE4F3',
   xpRewards: '0x1B869035546A16cBE7825EDb262ec2652A8dF11a',
-  coinflip: '0x835C0aD02c1a81bEF7eAc7340267ba182F1Db1D7'
+  coinflip: '0x835C0aD02c1a81bEF7eAc7340267ba182F1Db1D7',
+  // TODO: update with actual deployed Mines game contract address when available
+  mines: '0x0000000000000000000000000000000000000000',
 } as const;
 
 // Network configuration
