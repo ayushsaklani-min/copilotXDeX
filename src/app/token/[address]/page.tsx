@@ -21,7 +21,6 @@ export default function TokenPage({ params }: any) {
   const tokenStats = tokenInfo as any;
   const [buyAmount, setBuyAmount] = useState('');
   const [sellAmount, setSellAmount] = useState('');
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   
   const creationFeeValue = useMemo(
     () => (creationFee ? BigInt(creationFee) : 0n),
@@ -113,11 +112,6 @@ export default function TokenPage({ params }: any) {
   
   const handleBuy = () => {
     if (!buyAmount || !userAddress) return;
-    if (!isRegistered) {
-      setStatusMessage('Token is not registered with the bonding curve factory. Please complete registration before trading.');
-      return;
-    }
-    setStatusMessage(null);
     buyTokens({
       address: tokenAddress,
       abi: BondingCurveTokenABI,
@@ -128,11 +122,6 @@ export default function TokenPage({ params }: any) {
   
   const handleSell = () => {
     if (!sellAmount || !userAddress) return;
-    if (!isRegistered) {
-      setStatusMessage('Token is not registered with the bonding curve factory. Please complete registration before trading.');
-      return;
-    }
-    setStatusMessage(null);
     sellTokens({
       address: tokenAddress,
       abi: BondingCurveTokenABI,
@@ -142,20 +131,12 @@ export default function TokenPage({ params }: any) {
   };
 
   const handleRegisterToken = () => {
-    if (!isCreator) {
-      setStatusMessage('Only the token creator can register this token with the factory.');
-      return;
-    }
     if (!onChainName || !onChainSymbol || curveType === undefined || initialPrice === undefined) {
-      setStatusMessage('Unable to read token metadata from chain. Please try again in a moment.');
       return;
     }
     if (!creationFeeValue || creationFeeValue === 0n) {
-      setStatusMessage('Creation fee is not available. Please refresh and ensure the factory is deployed.');
       return;
     }
-
-    setStatusMessage('Submitting registration transaction to BondingCurveFactoryV2...');
 
     registerToken({
       address: contractAddresses.bondingCurveFactory as `0x${string}`,
@@ -212,35 +193,6 @@ export default function TokenPage({ params }: any) {
             {/* Trading Interface */}
             <Card variant="elevated" padding="lg">
               <h2 className="text-xl font-bold text-white mb-4">Trade</h2>
-              {/* Registration status */}
-              {!isRegistered && (
-                <div className="mb-4 p-4 rounded-lg border border-warning-500 bg-warning-500/10 text-sm text-warning-300">
-                  <p className="font-semibold mb-1">This token is not registered with the BondingCurveFactoryV2.</p>
-                  <p className="mb-2">
-                    Trading is disabled until registration is completed. This can happen if the original factory registration
-                    transaction failed on creation.
-                  </p>
-                  {isCreator ? (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={handleRegisterToken}
-                      disabled={isRegistering}
-                    >
-                      {isRegistering ? 'Registering...' : 'Finish Registration (Creator Only)'}
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-warning-300">
-                      Ask the token creator to open this page and complete registration from their wallet.
-                    </p>
-                  )}
-                </div>
-              )}
-              {statusMessage && (
-                <div className="mb-4 p-3 rounded-lg bg-dark-bg-secondary border border-dark-border-primary text-xs text-neutral-300">
-                  {statusMessage}
-                </div>
-              )}
               {userAddress ? (
                 <div className="space-y-4">
                   <div>
@@ -270,7 +222,7 @@ export default function TokenPage({ params }: any) {
                       variant="success" 
                       fullWidth 
                       onClick={handleBuy}
-                      disabled={isBuying || !buyAmount || !isRegistered}
+                      disabled={isBuying || !buyAmount}
                     >
                       {isBuying ? 'Buying...' : 'Buy Tokens'}
                     </Button>
@@ -278,7 +230,7 @@ export default function TokenPage({ params }: any) {
                       variant="danger" 
                       fullWidth 
                       onClick={handleSell}
-                      disabled={isSelling || !sellAmount || !isRegistered}
+                      disabled={isSelling || !sellAmount}
                     >
                       {isSelling ? 'Selling...' : 'Sell Tokens'}
                     </Button>

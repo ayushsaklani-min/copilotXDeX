@@ -90,19 +90,26 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         totalVolume += msg.value;
         totalBuys++;
         
-        // Update factory stats
+        // Update factory stats (best-effort only, never break trading)
         uint256 currentPrice = getCurrentPrice();
         uint256 tvl = address(this).balance;
         uint256 marketCap = totalSupply() * currentPrice / 1e18;
-        
-        IBondingCurveFactory(factory).updateTokenStats(
-            address(this),
-            true,
-            msg.value,
-            currentPrice,
-            tvl,
-            marketCap
-        );
+
+        if (factory != address(0)) {
+            // If the factory call fails (e.g. token not registered), ignore it so buys still work
+            try IBondingCurveFactory(factory).updateTokenStats(
+                address(this),
+                true,
+                msg.value,
+                currentPrice,
+                tvl,
+                marketCap
+            ) {
+                // no-op on success
+            } catch {
+                // ignore failures
+            }
+        }
         
         emit Buy(msg.sender, msg.value, tokensToMint, currentPrice);
     }
@@ -134,19 +141,26 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         // Transfer MATIC
         payable(msg.sender).transfer(amountAfterFee);
         
-        // Update factory stats
+        // Update factory stats (best-effort only, never break trading)
         uint256 currentPrice = getCurrentPrice();
         uint256 tvl = address(this).balance;
         uint256 marketCap = totalSupply() * currentPrice / 1e18;
-        
-        IBondingCurveFactory(factory).updateTokenStats(
-            address(this),
-            false,
-            maticReturn,
-            currentPrice,
-            tvl,
-            marketCap
-        );
+
+        if (factory != address(0)) {
+            // If the factory call fails (e.g. token not registered), ignore it so sells still work
+            try IBondingCurveFactory(factory).updateTokenStats(
+                address(this),
+                false,
+                maticReturn,
+                currentPrice,
+                tvl,
+                marketCap
+            ) {
+                // no-op on success
+            } catch {
+                // ignore failures
+            }
+        }
         
         emit Sell(msg.sender, tokenAmount, amountAfterFee, currentPrice);
     }
