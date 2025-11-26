@@ -8,7 +8,9 @@ import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
 import BondingCurveTokenABI from '@/config/abis/BondingCurveToken.json';
 
-export default function TokenPage({ params }: { params: { address: string } }) {
+// Note: loosen props typing to satisfy Next.js PageProps constraint in Next 15
+// while keeping this as a client component using hooks.
+export default function TokenPage({ params }: any) {
   const tokenAddress = params.address as `0x${string}`;
   const { address: userAddress } = useAccount();
   const { tokenInfo } = useGetTokenInfo(tokenAddress);
