@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Card, Button } from '@/design-system/components';
 import { Shield, Users, MessageSquare } from 'lucide-react';
-import { useBondingCurveFactory, useGetTokenInfo } from '@/hooks/useBondingCurveFactory';
+import { useGetTokenInfo } from '@/hooks/useBondingCurveFactory';
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { BaseError, parseEther, formatEther } from 'viem';
-import { contractAddresses } from '@/config/contracts-v2';
 import BondingCurveTokenABI from '@/config/abis/BondingCurveToken.json';
-import BondingCurveFactoryV2ABI from '@/config/abis/BondingCurveFactoryV2.json';
 
 // Note: loosen props typing to satisfy Next.js PageProps constraint in Next 15
 // while keeping this as a client component using hooks.
@@ -16,7 +14,6 @@ export default function TokenPage({ params }: any) {
   const tokenAddress = params.address as `0x${string}`;
   const { address: userAddress } = useAccount();
   const { tokenInfo } = useGetTokenInfo(tokenAddress);
-  const { creationFee } = useBondingCurveFactory();
   const publicClient = usePublicClient();
   // Loosely type on-chain token stats to avoid TS complaining about dynamic contract return shape
   const tokenStats = tokenInfo as any;
@@ -24,11 +21,6 @@ export default function TokenPage({ params }: any) {
   const [sellAmount, setSellAmount] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'info' | 'success' | 'error'>('info');
-  
-  const creationFeeValue = useMemo(
-    () => (creationFee ? BigInt(creationFee) : 0n),
-    [creationFee]
-  );
   
   // Read basic token info directly from the token contract (works even if factory registration failed)
   const { data: onChainName } = useReadContract({
@@ -42,51 +34,6 @@ export default function TokenPage({ params }: any) {
     abi: BondingCurveTokenABI,
     functionName: 'symbol',
   });
-
-  // Extra on-chain metadata we need to (re)register token if factory entry is missing
-  const { data: creator } = useReadContract({
-    address: tokenAddress,
-    abi: BondingCurveTokenABI,
-    functionName: 'creator',
-  });
-
-  const { data: curveType } = useReadContract({
-    address: tokenAddress,
-    abi: BondingCurveTokenABI,
-    functionName: 'curveType',
-  });
-
-  const { data: initialPrice } = useReadContract({
-    address: tokenAddress,
-    abi: BondingCurveTokenABI,
-    functionName: 'initialPrice',
-  });
-
-  // Read token registration info from factory
-  const { data: factoryTokenInfo, refetch: refetchFactoryTokenInfo } = useReadContract({
-    address: contractAddresses.bondingCurveFactory as `0x${string}`,
-    abi: BondingCurveFactoryV2ABI,
-    functionName: 'getTokenInfo',
-    args: [tokenAddress],
-    query: {
-      enabled: !!tokenAddress,
-    },
-  });
-
-  const isRegistered = useMemo(() => {
-    if (!factoryTokenInfo) return false;
-    // TokenInfo is a struct; depending on ABI decoding it may be an array or object.
-    const info = factoryTokenInfo as any;
-    const registeredAddress: string =
-      info.tokenAddress || (Array.isArray(info) ? info[0] : '');
-    if (!registeredAddress) return false;
-    return registeredAddress.toLowerCase() !== '0x0000000000000000000000000000000000000000';
-  }, [factoryTokenInfo]);
-
-  const isCreator = useMemo(() => {
-    if (!creator || !userAddress) return false;
-    return (creator as string).toLowerCase() === userAddress.toLowerCase();
-  }, [creator, userAddress]);
 
   const { data: onChainNameSafe } = { data: onChainName };
   const { data: onChainSymbolSafe } = { data: onChainSymbol };
@@ -136,7 +83,6 @@ export default function TokenPage({ params }: any) {
 
   const { writeContractAsync: buyTokens, isPending: isBuying } = useWriteContract();
   const { writeContractAsync: sellTokens, isPending: isSelling } = useWriteContract();
-  const { writeContractAsync: registerToken, isPending: isRegistering } = useWriteContract();
   
   const handleBuy = useCallback(async () => {
     if (!buyAmount || !userAddress) return;
@@ -176,57 +122,6 @@ export default function TokenPage({ params }: any) {
     }
   }, [sellAmount, userAddress, tokenAddress, sellTokens, waitForReceipt, showStatus, getErrorMessage]);
 
-  const handleRegisterToken = useCallback(async () => {
-    if (!isCreator) {
-      showStatus('Only the token creator can register this token with the factory.', 'error');
-      return;
-    }
-    if (!onChainName || !onChainSymbol || curveType === undefined || initialPrice === undefined) {
-      showStatus('Unable to read token metadata from chain. Please refresh and try again.', 'error');
-      return;
-    }
-    if (!creationFeeValue || creationFeeValue === 0n) {
-      showStatus('Creation fee is unavailable. Refresh and ensure the factory is deployed.', 'error');
-      return;
-    }
-  
-    try {
-      showStatus('Submitting registration transaction to BondingCurveFactoryV2...', 'info');
-      const hash = await registerToken({
-        address: contractAddresses.bondingCurveFactory as `0x${string}`,
-        abi: BondingCurveFactoryV2ABI,
-        functionName: 'registerToken',
-        args: [
-          tokenAddress,
-          (onChainName as string),
-          (onChainSymbol as string),
-          Number(curveType as bigint),
-          initialPrice as bigint,
-        ],
-        value: creationFeeValue,
-      });
-      showStatus('Waiting for confirmation...', 'info');
-      await waitForReceipt(hash);
-      await refetchFactoryTokenInfo();
-      showStatus('Registration confirmed! Token stats will refresh shortly.', 'success');
-    } catch (error) {
-      showStatus(getErrorMessage(error), 'error');
-    }
-  }, [
-    creationFeeValue,
-    curveType,
-    getErrorMessage,
-    initialPrice,
-    isCreator,
-    onChainName,
-    onChainSymbol,
-    refetchFactoryTokenInfo,
-    registerToken,
-    showStatus,
-    tokenAddress,
-    waitForReceipt,
-  ]);
-  
   const displayName = (tokenInfo as any)?.name || (onChainName as string) || 'Token';
   const displaySymbol = (tokenInfo as any)?.symbol || (onChainSymbol as string) || 'TOKEN';
 
@@ -273,34 +168,6 @@ export default function TokenPage({ params }: any) {
             {/* Trading Interface */}
             <Card variant="elevated" padding="lg">
               <h2 className="text-xl font-bold text-white mb-4">Trade</h2>
-              {!isRegistered && (
-                <div className="mb-4 p-4 rounded-lg border border-warning-500 bg-warning-500/10 text-sm text-warning-300">
-                  <p className="font-semibold mb-1">This token is not registered with the BondingCurveFactoryV2.</p>
-                  <p className="mb-2">
-                    Trading is still available, but TVL/market cap analytics will be stale until registration completes.
-                    This can happen when the original factory transaction failed.
-                  </p>
-                  {isCreator ? (
-                    <div className="space-y-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={handleRegisterToken}
-                        disabled={isRegistering}
-                      >
-                        {isRegistering ? 'Registering...' : 'Finish Registration (Creator Only)'}
-                      </Button>
-                      <p className="text-xs text-warning-200">
-                        Creation fee: {creationFeeValue ? `${Number(formatEther(creationFeeValue)).toFixed(3)} MATIC` : '...'}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-warning-200">
-                      Ask the token creator to connect their wallet and finish registration from this page.
-                    </p>
-                  )}
-                </div>
-              )}
               {statusMessage && (
                 <div className={`mb-4 p-3 rounded-lg border text-xs ${statusStyles[statusType]}`}>
                   {statusMessage}
