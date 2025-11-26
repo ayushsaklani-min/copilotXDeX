@@ -12,7 +12,8 @@ export default function GamesPage() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const { address } = useAccount();
   const { totalXP, level, streak, multiplier } = useUserXP();
-  const { missions } = useDailyMissions();
+  // Ensure missions is always treated as an array for type safety
+  const { missions = [] } = useDailyMissions() as { missions?: any[] };
 
   if (activeGame === 'coinflip') {
     return <CoinflipGame onBack={() => setActiveGame(null)} />;
