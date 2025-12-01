@@ -316,15 +316,6 @@ All contracts verified on [PolygonScan](https://amoy.polygonscan.com).
 
 ---
 
-## Documentation
-
-- [Smart Contract Documentation](./docs/contracts.md)
-- [API Reference](./docs/api.md)
-- [User Guide](./docs/user-guide.md)
-- [Developer Guide](./docs/dev-guide.md)
-
----
-
 ## Contributing
 
 Contributions welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
@@ -339,21 +330,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 
 ## Contact
 
-- **Website**: [copilotxdex.com](https://copilotxdex.com)
-- **Twitter**: [@CopilotXDEX](https://twitter.com/copilotxdex)
-- **Discord**: [Join Community](https://discord.gg/copilotxdex)
-- **GitHub**: [github.com/copilotxdex](https://github.com/copilotxdex)
-
----
-
-<div align="center">
-
-**CopilotXDEX 2.0 — The Future of DeFi**
-
-AI + GameFi + Bonding Curves on Polygon
-
-[Launch App](https://copilotxdex.com) • [Documentation](./docs) • [Community](https://discord.gg/copilotxdex)
+- **GitHub**: [github.com/copilotxdex](https://github.com/copilotxdex • 
 
 Built with Polygon
 
-</div>
