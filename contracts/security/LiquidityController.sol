@@ -20,13 +20,30 @@ contract LiquidityController is Ownable, ReentrancyGuard {
         uint256 unlockTime;
         bool isUnlocked;
         uint256 percentage; // Percentage of total LP locked
+        uint256 tier; // 0=Bronze, 1=Silver, 2=Gold
+        uint256 bonusRewards; // Accumulated bonus rewards
+        bool isVesting; // Whether this is a vesting lock
+        uint256 vestedAmount; // Amount already vested
+    }
+    
+    enum LockTier { BRONZE, SILVER, GOLD }
+    
+    struct TierInfo {
+        uint256 minDuration;
+        uint256 bonusPercentage;
+        string name;
     }
     
     mapping(address => LockInfo[]) public tokenLocks;
     mapping(address => mapping(address => uint256)) public userLockCount;
+    mapping(uint256 => TierInfo) public tiers;
+    mapping(address => uint256) public totalRewardsEarned;
     
     uint256 public constant MIN_LOCK_DURATION = 30 days;
     uint256 public constant MAX_LOCK_DURATION = 1095 days; // 3 years
+    uint256 public constant EMERGENCY_UNLOCK_PENALTY = 20; // 20% penalty
+    
+    uint256 public rewardPool;
     
     event LiquidityLocked(
         address indexed token,
@@ -50,7 +67,112 @@ contract LiquidityController is Ownable, ReentrancyGuard {
         uint256 newUnlockTime
     );
     
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    constructor(address initialOwner) Ownable(initialOwner) {
+        // Initialize tier system
+        tiers[uint256(LockTier.BRONZE)] = TierInfo({
+            minDuration: 30 days,
+            bonusPercentage: 5,
+            name: "Bronze"
+        });
+        
+        tiers[uint256(LockTier.SILVER)] = TierInfo({
+            minDuration: 90 days,
+            bonusPercentage: 20,
+            name: "Silver"
+        });
+        
+        tiers[uint256(LockTier.GOLD)] = TierInfo({
+            minDuration: 365 days,
+            bonusPercentage: 60,
+            name: "Gold"
+        });
+    }
+    
+    /**
+     * @notice Calculate lock tier based on duration
+     */
+    function calculateTier(uint256 duration) public pure returns (uint256) {
+        if (duration >= 365 days) return uint256(LockTier.GOLD);
+        if (duration >= 90 days) return uint256(LockTier.SILVER);
+        return uint256(LockTier.BRONZE);
+    }
+    
+    /**
+     * @notice Calculate bonus rewards for a lock
+     */
+    function calculateBonusRewards(uint256 amount, uint256 duration) public view returns (uint256) {
+        uint256 tier = calculateTier(duration);
+        TierInfo memory tierInfo = tiers[tier];
+        return (amount * tierInfo.bonusPercentage) / 100;
+    }
+    
+    /**
+     * @notice Emergency unlock with penalty
+     */
+    function emergencyUnlock(address token, uint256 lockId) external nonReentrant {
+        require(lockId < tokenLocks[token].length, "Invalid lock ID");
+        
+        LockInfo storage lock = tokenLocks[token][lockId];
+        require(lock.owner == msg.sender, "Not lock owner");
+        require(!lock.isUnlocked, "Already unlocked");
+        require(block.timestamp < lock.unlockTime, "Lock already expired");
+        
+        // Calculate penalty
+        uint256 penalty = (lock.amount * EMERGENCY_UNLOCK_PENALTY) / 100;
+        uint256 returnAmount = lock.amount - penalty;
+        
+        lock.isUnlocked = true;
+        
+        // Transfer reduced amount to owner
+        IERC20(lock.lpToken).transfer(msg.sender, returnAmount);
+        
+        // Penalty goes to reward pool
+        rewardPool += penalty;
+        
+        emit LiquidityUnlocked(token, lock.lpToken, msg.sender, returnAmount);
+    }
+    
+    /**
+     * @notice Claim accumulated bonus rewards
+     */
+    function claimRewards(address token, uint256 lockId) external nonReentrant {
+        require(lockId < tokenLocks[token].length, "Invalid lock ID");
+        
+        LockInfo storage lock = tokenLocks[token][lockId];
+        require(lock.owner == msg.sender, "Not lock owner");
+        require(lock.bonusRewards > 0, "No rewards to claim");
+        require(rewardPool >= lock.bonusRewards, "Insufficient reward pool");
+        
+        uint256 rewards = lock.bonusRewards;
+        lock.bonusRewards = 0;
+        totalRewardsEarned[msg.sender] += rewards;
+        rewardPool -= rewards;
+        
+        // Transfer rewards (in MATIC)
+        payable(msg.sender).transfer(rewards);
+    }
+    
+    /**
+     * @notice Fund reward pool
+     */
+    function fundRewardPool() external payable onlyOwner {
+        require(msg.value > 0, "Must send funds");
+        rewardPool += msg.value;
+    }
+    
+    /**
+     * @notice Get user's total rewards earned
+     */
+    function getUserRewards(address user) external view returns (uint256) {
+        return totalRewardsEarned[user];
+    }
+    
+    /**
+     * @notice Get tier information
+     */
+    function getTierInfo(uint256 tier) external view returns (TierInfo memory) {
+        return tiers[tier];
+    }
     
     /**
      * @notice Lock LP tokens
@@ -77,6 +199,10 @@ contract LiquidityController is Ownable, ReentrancyGuard {
         uint256 totalLP = IERC20(lpToken).totalSupply();
         uint256 percentage = (amount * 100) / totalLP;
         
+        // Calculate tier and bonus rewards
+        uint256 tier = calculateTier(duration);
+        uint256 bonusRewards = calculateBonusRewards(amount, duration);
+        
         // Create lock
         uint256 unlockTime = block.timestamp + duration;
         LockInfo memory lock = LockInfo({
@@ -87,7 +213,11 @@ contract LiquidityController is Ownable, ReentrancyGuard {
             lockedAt: block.timestamp,
             unlockTime: unlockTime,
             isUnlocked: false,
-            percentage: percentage
+            percentage: percentage,
+            tier: tier,
+            bonusRewards: bonusRewards,
+            isVesting: false,
+            vestedAmount: 0
         });
         
         tokenLocks[token].push(lock);
@@ -225,9 +355,9 @@ contract LiquidityController is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @notice Emergency unlock (owner only, for emergencies)
+     * @notice Emergency unlock by owner (for emergencies only)
      */
-    function emergencyUnlock(address token, uint256 lockId) external onlyOwner {
+    function ownerEmergencyUnlock(address token, uint256 lockId) external onlyOwner {
         require(lockId < tokenLocks[token].length, "Invalid lock ID");
         
         LockInfo storage lock = tokenLocks[token][lockId];

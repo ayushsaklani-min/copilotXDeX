@@ -14,15 +14,26 @@ export const contractAddresses = {
   governanceBadge: '0x60b7bbBb35A04eE9627f6E862131E9C7C246Bc39',
   governance: '0xEC1e21ba8D831b3eAC77663f1e5b4c52906D3eFc',
   
-  // New V2 contracts (DEPLOYED ✅)
-  bondingCurveFactory: '0x07e76C0667879a069D56cFC9019B63fC6F2DBfa5',
-  rugScanner: '0xBF54a9f576C8971BBAEe036e75B259949b754131',
-  liquidityController: '0xFc76109Fbe3a78c97808A20c9b62177756a05930',
+  // New V2 contracts (DEPLOYED ✅ Dec 14, 2025) - FIXED bonding curve math!
+  bondingCurveFactory: '0xAac9334B6EF29A915b7Bf69c667911DeC0440c50', // V3 Full with DEX + LP Lock
+  
+  // DEX Contracts (DEPLOYED ✅ Dec 14, 2025)
+  weth: '0xbe2E93d14856da185d7eAb011629e4eeAE689a4E',
+  dexFactory: '0xea492c4c23FB7a90C51b065b1A67C9591a2D2e15',
+  dexRouter: '0x330D6Fa8082099053cCE8d805532087F4E99DB1c',
   socialGraph: '0xe1705bEF589bdcAb37fA47786af81b97275aE4F3',
   xpRewards: '0x1B869035546A16cBE7825EDb262ec2652A8dF11a',
   coinflip: '0x835C0aD02c1a81bEF7eAc7340267ba182F1Db1D7',
   // TODO: update with actual deployed Mines game contract address when available
   mines: '0x0000000000000000000000000000000000000000',
+  
+  // V3 Upgraded Contracts (DEPLOYED ✅ Dec 14, 2025)
+  rugScannerV3: '0x36A936556AE0c375B6d8B3272dea20B01C1aC52f',
+  liquidityControllerV3: '0x82d107d355380FC2f030F1DE172335d9C0C08944',
+  
+  // Legacy V2 contracts (for backward compatibility)
+  rugScanner: '0xBF54a9f576C8971BBAEe036e75B259949b754131', // Old version
+  liquidityController: '0xFc76109Fbe3a78c97808A20c9b62177756a05930', // Old version
 } as const;
 
 // Network configuration

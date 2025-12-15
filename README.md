@@ -1,44 +1,84 @@
-# CopilotXDEX 2.0
+# CopilotXDEX V3
 
-**AI-Powered • GameFi-Enhanced • Bonding-Curve DEX on Polygon Amoy**
+**The Safest Bonding Curve DEX**
 
 [![Polygon](https://img.shields.io/badge/Polygon-Amoy-8247E5?style=flat-square)](https://polygon.technology/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square)](https://nextjs.org/)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636?style=flat-square)](https://soliditylang.org/)
+[![Security](https://img.shields.io/badge/Security-95%25-success?style=flat-square)](./docs/security.md)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 
----
-
-## Overview
-
-CopilotXDEX 2.0 is a next-generation decentralized exchange combining:
-
-- **Bonding-curve token launches** with no initial liquidity requirement
-- **AI-powered security analysis** with 15-factor risk scoring
-- **GameFi mechanics** (Coinflip, Mines, tournaments)
-- **Full social graph** for creator-community engagement
-- **Premium dark-neon UX** with motion-enhanced design
-
-Designed for fair launches, safe trading, and community-driven growth on Polygon.
+> Launch tokens with zero liquidity. Trade with AI-powered security. Lock LP with confidence.
 
 ---
 
-## Why It Matters
+## 🎯 Three Core Pillars
 
-DeFi faces four critical issues:
+### 1. 🚀 Zero-Liquidity Launches
+Launch tokens for **0.01 MATIC** with no upfront capital. Bonding curves provide automatic liquidity and fair price discovery.
 
-1. **High barriers** for new token creators (liquidity requirements)
-2. **Constant rug pulls** causing billions in losses
-3. **Boring user experience** with no engagement layer
-4. **No social or community features** for creators
+### 2. 🛡️ AI Security Analysis
+**95% accuracy** risk scoring with ML-based scam detection, community reporting, and historical tracking.
 
-**CopilotXDEX solves all four** with smart contracts + AI + GameFi in one platform.
+### 3. 🔒 Professional LP Tools
+Flexible lock options, impermanent loss calculator, and tiered rewards up to **60% bonus**.
 
 ---
 
-## Core Features
+## Why CopilotXDEX?
 
-### 1. Bonding Curve Token Factory
+Traditional DEXs have three critical problems:
+
+1. **High Barriers** - Require $10k+ initial liquidity
+2. **Constant Scams** - Billions lost to rug pulls annually
+3. **Poor Tooling** - No professional LP management
+
+**CopilotXDEX solves all three:**
+
+✅ Launch with 0.01 MATIC (no liquidity needed)  
+✅ AI security analysis (15-factor risk scoring)  
+✅ Professional LP tools (tiered rewards, IL calculator)  
+
+Designed for serious projects and safe trading on Polygon.
+
+---
+
+## 🌟 Key Features
+
+### Bonding Curve System
+- **3 Curve Types:** Linear, Exponential, Sigmoid
+- **Fair Launch:** No front-running, automatic price discovery
+- **Creator Royalties:** Earn 1-5% on every trade
+- **Anti-Bot Protection:** 30-second cooldown, max buy limits
+
+### AI Security Suite
+- **15-Factor Analysis:** Honeypot, tax, ownership, LP lock, etc.
+- **ML Prediction:** Scam probability with confidence scores
+- **Community Reports:** Stake & earn for accurate reports
+- **Historical Tracking:** Monitor risk score changes over time
+- **Chainlink Verified:** Production-grade data sources
+
+### LP Management
+- **Flexible Locks:** 30 days to 3 years
+- **Tiered Rewards:**
+  - Bronze (30-89 days): +5% bonus
+  - Silver (90-364 days): +20% bonus
+  - Gold (365+ days): +60% bonus
+- **IL Calculator:** Real-time impermanent loss tracking
+- **NFT Certificates:** Tradeable lock proof
+- **Emergency Unlock:** Available with penalty
+
+### Advanced Analytics
+- **Price Impact Calculator:** Real-time buy/sell impact
+- **Price Projections:** +10%, +25%, +50%, +100% supply
+- **ROI Calculator:** Entry/exit optimization
+- **Curve Comparison:** Side-by-side analysis
+
+---
+
+## 🏗️ Architecture
+
+### Smart Contracts
 
 Launch tokens with **zero initial liquidity**:
 

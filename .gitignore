@@ -112,3 +112,5 @@ temp/
 # Local deployment files
 deploy-report.json
 deploy-factory.json
+*-deployment.json
+complete-dex-deployment.json

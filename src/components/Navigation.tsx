@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { Button } from '@/design-system/components';
-import { Menu, X, Zap, TrendingUp, Gamepad2, BarChart3, Rocket, Wallet, LogOut } from 'lucide-react';
+import { Menu, X, Zap, TrendingUp, BarChart3, Rocket, Wallet, LogOut, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Navigation() {
@@ -21,9 +21,9 @@ export default function Navigation() {
   }, []);
 
   const navItems = [
-    { href: '/dex', label: 'Trade', icon: TrendingUp },
-    { href: '/creator', label: 'Create', icon: Rocket },
-    { href: '/games', label: 'Games', icon: Gamepad2 },
+    { href: '/creator', label: 'Launch Token', icon: Rocket },
+    { href: '/trade', label: 'Trade', icon: TrendingUp },
+    { href: '/liquidity', label: 'Liquidity', icon: Lock },
     { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   ];
 
@@ -50,7 +50,7 @@ export default function Navigation() {
               <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold text-white">CopilotXDEX</span>
-            <span className="px-2 py-0.5 text-xs font-semibold bg-primary-500/20 text-primary-500 rounded-full">2.0</span>
+            <span className="px-2 py-0.5 text-xs font-semibold bg-primary-500/20 text-primary-500 rounded-full">V3</span>
           </Link>
 
           {/* Desktop Navigation */}

@@ -4,13 +4,12 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, Button, Input } from '@/design-system/components';
 import { Rocket, Lock, BarChart3, Settings, Upload } from 'lucide-react';
-import { useAccount, useWriteContract, useDeployContract, usePublicClient } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
 import { parseEther, formatEther } from 'viem';
-import { useBondingCurveFactory, useGetCreatorTokens } from '@/hooks/useBondingCurveFactory';
+import { ethers } from 'ethers';
+import { useBondingCurveFactory, useGetCreatorTokens, useCreateToken } from '@/hooks/useBondingCurveFactory';
 import { CurveType, contractAddresses, formatAddress } from '@/config/contracts-v2';
-import BondingCurveTokenABI from '@/config/abis/BondingCurveToken.json';
-import BondingCurveTokenBytecode from '@/config/abis/BondingCurveTokenBytecode.json';
-import BondingCurveFactoryV2ABI from '@/config/abis/BondingCurveFactoryV2.json';
+import BondingCurveFactoryV3ABI from '@/config/abis/BondingCurveFactoryV3.json';
 
 export default function CreatorDashboard() {
   const [activeTab, setActiveTab] = useState('create');
@@ -34,10 +33,10 @@ export default function CreatorDashboard() {
   const [status, setStatus] = useState<{ message: string; type: 'info' | 'success' | 'error' }>({ message: '', type: 'info' });
   const [deployedAddress, setDeployedAddress] = useState<string>('');
   const [localTokens, setLocalTokens] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
   
   const publicClient = usePublicClient();
-  const { deployContractAsync, isPending: isDeploying } = useDeployContract();
-  const { writeContractAsync, isPending: isRegistering, error } = useWriteContract();
+  const { createToken, isLoading: isCreating, isSuccess: isCreateSuccess, data: createTxHash } = useCreateToken();
   const [isProcessing, setIsProcessing] = useState(false);
   
   const shortAccount = address ? formatAddress(address) : '';
@@ -48,9 +47,14 @@ export default function CreatorDashboard() {
     [creatorTokens, localTokens]
   );
 
+  // Handle client-side mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Load locally stored tokens for this creator (for cases where factory registration fails)
   useEffect(() => {
-    if (!address || typeof window === 'undefined') return;
+    if (!mounted || !address) return;
     try {
       const key = `creator_tokens_${address.toLowerCase()}`;
       const raw = window.localStorage.getItem(key);
@@ -63,12 +67,13 @@ export default function CreatorDashboard() {
     } catch {
       // ignore storage errors
     }
-  }, [address]);
+  }, [address, mounted]);
 
   const addLocalToken = (tokenAddr: string) => {
+    if (!mounted) return;
     setLocalTokens((prev) => {
       const next = Array.from(new Set([...prev, tokenAddr]));
-      if (address && typeof window !== 'undefined') {
+      if (address) {
         try {
           const key = `creator_tokens_${address.toLowerCase()}`;
           window.localStorage.setItem(key, JSON.stringify(next));
@@ -137,69 +142,68 @@ export default function CreatorDashboard() {
     
     try {
       setIsProcessing(true);
-      setStatus({ message: 'Deploying your bonding curve token...', type: 'info' });
+      setStatus({ message: 'Creating your bonding curve token...', type: 'info' });
 
-      const deploymentHash = await deployContractAsync({
-        abi: BondingCurveTokenABI,
-        bytecode: BondingCurveTokenBytecode.bytecode as `0x${string}`,
-        args: [
-          tokenName,
-          tokenSymbol,
-          address,
-          contractAddresses.bondingCurveFactory,
-          curveType,
-          parseEther(initialPrice),
-          BigInt(royaltyInt),
-          metadata,
-        ],
-      });
+      const creationFeeDisplay = creationFeeValue ? formatEther(creationFeeValue) : '0.01';
+      
+      // Call factory.createToken directly
+      createToken(
+        tokenName,
+        tokenSymbol,
+        curveType,
+        initialPrice,
+        royaltyInt,
+        metadata,
+        creationFeeDisplay
+      );
 
-      if (!publicClient) {
-        throw new Error('Public client not initialized');
-      }
-
-      const deploymentReceipt = await publicClient.waitForTransactionReceipt({
-        hash: deploymentHash,
-      });
-
-      if (!deploymentReceipt.contractAddress) {
-        throw new Error('Deployment failed: no contract address returned');
-      }
-
-      setStatus({ message: 'Registering token with the factory...', type: 'info' });
-
-      try {
-        await writeContractAsync({
-          address: contractAddresses.bondingCurveFactory as `0x${string}`,
-          abi: BondingCurveFactoryV2ABI,
-          functionName: 'registerToken',
-          args: [
-            deploymentReceipt.contractAddress,
-            tokenName,
-            tokenSymbol,
-            curveType,
-            parseEther(initialPrice),
-          ],
-          value: creationFeeValue,
+      // Wait for transaction
+      if (createTxHash && publicClient) {
+        setStatus({ message: 'Waiting for confirmation...', type: 'info' });
+        
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: createTxHash,
         });
-        if (refetch) {
-          await refetch();
-        }
-      } catch (registerError) {
-        // If on-chain registration fails, we still track the token locally
-        console.error('Factory registration failed, falling back to local tracking:', registerError);
-      }
 
-      setDeployedAddress(deploymentReceipt.contractAddress);
-      addLocalToken(deploymentReceipt.contractAddress);
-      setStatus({
-        message: 'Token live! Share it with your community.',
-        type: 'success',
-      });
+        // Parse TokenCreated event to get token address
+        const factoryInterface = new ethers.Interface(BondingCurveFactoryV3ABI);
+        const tokenCreatedEvent = receipt.logs.find(log => {
+          try {
+            const parsed = factoryInterface.parseLog({
+              topics: log.topics as string[],
+              data: log.data,
+            });
+            return parsed?.name === 'TokenCreated';
+          } catch {
+            return false;
+          }
+        });
+
+        if (tokenCreatedEvent) {
+          const parsed = factoryInterface.parseLog({
+            topics: tokenCreatedEvent.topics as string[],
+            data: tokenCreatedEvent.data,
+          });
+          const tokenAddr = parsed?.args?.tokenAddress;
+          
+          if (tokenAddr) {
+            setDeployedAddress(tokenAddr);
+            addLocalToken(tokenAddr);
+            setStatus({
+              message: 'Token created successfully! 🎉',
+              type: 'success',
+            });
+            
+            if (refetch) {
+              await refetch();
+            }
+          }
+        }
+      }
     } catch (err: any) {
       console.error('Error:', err);
       setStatus({ 
-        message: `Error: ${err.message || 'Failed to prepare deployment'}`, 
+        message: `Error: ${err.message || 'Failed to create token'}`, 
         type: 'error' 
       });
     } finally {
@@ -402,11 +406,7 @@ export default function CreatorDashboard() {
                   </div>
                 )}
 
-                {error && (
-                  <div className="p-4 bg-error-500/10 border border-error-500 rounded-lg">
-                    <p className="text-error-500 text-sm">{error.message}</p>
-                  </div>
-                )}
+
 
                 <Button 
                   variant="primary" 
@@ -418,12 +418,11 @@ export default function CreatorDashboard() {
                     !tokenName ||
                     !tokenSymbol ||
                     !initialPrice ||
-                    isDeploying ||
-                    isRegistering ||
+                    isCreating ||
                     isProcessing
                   }
                 >
-                  {(isDeploying || isRegistering || isProcessing) ? 'Deploying...' : 'Create Token'}
+                  {(isCreating || isProcessing) ? 'Creating Token...' : 'Create Token'}
                 </Button>
               </div>
             </Card>

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, use, useEffect } from 'react';
 import { Card, Button } from '@/design-system/components';
-import { Shield, Users, MessageSquare } from 'lucide-react';
+import { Shield, Users, MessageSquare, TrendingUp } from 'lucide-react';
+import { BondingCurveAnalytics } from '@/components/BondingCurveAnalytics';
 import { useGetTokenInfo } from '@/hooks/useBondingCurveFactory';
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from 'wagmi';
 import { BaseError, parseEther, formatEther } from 'viem';
@@ -11,7 +12,8 @@ import BondingCurveTokenABI from '@/config/abis/BondingCurveToken.json';
 // Note: loosen props typing to satisfy Next.js PageProps constraint in Next 15
 // while keeping this as a client component using hooks.
 export default function TokenPage({ params }: any) {
-  const tokenAddress = params.address as `0x${string}`;
+  const unwrappedParams = use(params) as { address: string };
+  const tokenAddress = unwrappedParams.address as `0x${string}`;
   const { address: userAddress } = useAccount();
   const { tokenInfo } = useGetTokenInfo(tokenAddress);
   const publicClient = usePublicClient();
@@ -21,6 +23,11 @@ export default function TokenPage({ params }: any) {
   const [sellAmount, setSellAmount] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'info' | 'success' | 'error'>('info');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Read basic token info directly from the token contract (works even if factory registration failed)
   const { data: onChainName } = useReadContract({
@@ -145,7 +152,7 @@ export default function TokenPage({ params }: any) {
                 <p className="text-xs text-neutral-500 font-mono mt-1">{tokenAddress}</p>
               </div>
             </div>
-            {userAddress && balance !== undefined && (
+            {mounted && userAddress && balance !== undefined && (
               <div className="text-right">
                 <p className="text-sm text-neutral-400">Your Balance</p>
                 <p className="text-2xl font-bold text-white">{Number(formatEther(balance as bigint)).toFixed(4)}</p>
@@ -157,13 +164,14 @@ export default function TokenPage({ params }: any) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Price Chart */}
-            <Card variant="elevated" padding="lg">
-              <h2 className="text-xl font-bold text-white mb-4">Price Chart</h2>
-              <div className="h-64 bg-dark-bg-secondary rounded-lg flex items-center justify-center">
-                <p className="text-neutral-500">Chart Component Here</p>
-              </div>
-            </Card>
+            {/* Bonding Curve Analytics */}
+            <BondingCurveAnalytics
+              tokenAddress={tokenAddress}
+              curveType={(tokenStats?.curveType === 0 ? 'LINEAR' : tokenStats?.curveType === 1 ? 'EXPONENTIAL' : 'SIGMOID') as any}
+              currentPrice={currentPrice ? Number(formatEther(currentPrice as bigint)) : 0.001}
+              currentSupply={1000}
+              initialPrice={0.001}
+            />
 
             {/* Trading Interface */}
             <Card variant="elevated" padding="lg">
@@ -173,7 +181,9 @@ export default function TokenPage({ params }: any) {
                   {statusMessage}
                 </div>
               )}
-              {userAddress ? (
+              {!mounted ? (
+                <p className="text-neutral-400 text-center py-4">Loading...</p>
+              ) : userAddress ? (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm text-neutral-400 mb-2">Buy Amount (MATIC)</label>

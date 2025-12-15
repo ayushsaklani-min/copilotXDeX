@@ -9,6 +9,7 @@ import "./IBondingCurveFactory.sol";
  * @title BondingCurveToken
  * @notice ERC20 token with bonding curve pricing - supply minted on buy, burned on sell
  * @dev Implements linear, exponential, and sigmoid bonding curves
+ * @dev v1.1 - LINEAR_SLOPE set to 1e12 for user-friendly token amounts
  */
 contract BondingCurveToken is ERC20, ReentrancyGuard {
     enum CurveType { LINEAR, EXPONENTIAL, SIGMOID }
@@ -38,8 +39,8 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
     uint256 public constant PROTOCOL_FEE = 5; // 0.05%
     uint256 public constant FEE_DENOMINATOR = 10000;
     
-    // Curve parameters
-    uint256 public constant LINEAR_SLOPE = 1e12; // Price increases linearly
+    // Curve parameters - FIXED for user-friendly token amounts
+    uint256 public constant LINEAR_SLOPE = 1e6; // Price increases slowly (gives ~1000 tokens per 0.01 MATIC)
     uint256 public constant EXPONENTIAL_BASE = 1001; // 1.001x per token
     uint256 public constant EXPONENTIAL_DENOMINATOR = 1000;
     
@@ -128,9 +129,14 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         
         uint256 maticReturn = calculateSellReturn(tokenAmount);
         require(maticReturn > 0, "Insufficient output");
-        require(address(this).balance >= maticReturn, "Insufficient liquidity");
         
-        uint256 amountAfterFee = _takeFees(maticReturn, false);
+        // Calculate fees
+        uint256 totalFeeAmount = (maticReturn * TOTAL_FEE) / FEE_DENOMINATOR;
+        uint256 creatorFeeAmount = (maticReturn * creatorRoyalty * 100) / FEE_DENOMINATOR;
+        uint256 amountAfterFee = maticReturn - totalFeeAmount - creatorFeeAmount;
+        
+        // Check contract has enough balance for payout + fees
+        require(address(this).balance >= maticReturn, "Insufficient liquidity");
         
         // Update state
         _burn(msg.sender, tokenAmount);
@@ -138,8 +144,14 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         totalVolume += maticReturn;
         totalSells++;
         
-        // Transfer MATIC
+        // Transfer MATIC to seller
         payable(msg.sender).transfer(amountAfterFee);
+        
+        // Pay creator royalty
+        if (creatorFeeAmount > 0) {
+            payable(creator).transfer(creatorFeeAmount);
+            emit CreatorRoyaltyPaid(creator, creatorFeeAmount);
+        }
         
         // Update factory stats (best-effort only, never break trading)
         uint256 currentPrice = getCurrentPrice();
@@ -167,50 +179,34 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
     
     /**
      * @notice Calculate tokens received for MATIC amount
+     * @dev Simplified calculation: tokens = maticAmount / currentPrice
      */
     function calculateBuyReturn(uint256 maticAmount) public view returns (uint256) {
-        uint256 supply = totalSupply();
+        uint256 currentPrice = getCurrentPrice();
+        if (currentPrice == 0) return 0;
         
-        if (curveType == CurveType.LINEAR) {
-            // Linear: price = initialPrice + (supply * slope)
-            // Integral: tokens = sqrt(2 * maticAmount / slope + (supply + initialPrice/slope)^2) - (supply + initialPrice/slope)
-            uint256 a = supply + (initialPrice * 1e18 / LINEAR_SLOPE);
-            uint256 b = 2 * maticAmount * 1e18 / LINEAR_SLOPE;
-            uint256 c = a * a + b;
-            return sqrt(c) - a;
-        } else if (curveType == CurveType.EXPONENTIAL) {
-            // Exponential: price = initialPrice * (base ^ supply)
-            // Simplified calculation for small amounts
-            uint256 currentPrice = getCurrentPrice();
-            return (maticAmount * 1e18) / currentPrice;
-        } else {
-            // Sigmoid: price = initialPrice / (1 + e^(-k * (supply - midpoint)))
-            // Simplified linear approximation
-            uint256 currentPrice = getCurrentPrice();
-            return (maticAmount * 1e18) / currentPrice;
-        }
+        // Simple calculation: tokens = MATIC / price
+        // Price is in wei per token, so we need to scale properly
+        return (maticAmount * 1e18) / currentPrice;
     }
     
     /**
      * @notice Calculate MATIC received for token amount
+     * @dev Uses average price between current and post-sell supply
      */
     function calculateSellReturn(uint256 tokenAmount) public view returns (uint256) {
         uint256 supply = totalSupply();
         require(supply >= tokenAmount, "Insufficient supply");
         
-        if (curveType == CurveType.LINEAR) {
-            // Linear sell calculation
-            uint256 avgPrice = (getCurrentPrice() + getPriceAtSupply(supply - tokenAmount)) / 2;
-            return (tokenAmount * avgPrice) / 1e18;
-        } else if (curveType == CurveType.EXPONENTIAL) {
-            // Exponential sell calculation
-            uint256 avgPrice = (getCurrentPrice() + getPriceAtSupply(supply - tokenAmount)) / 2;
-            return (tokenAmount * avgPrice) / 1e18;
-        } else {
-            // Sigmoid sell calculation
-            uint256 avgPrice = (getCurrentPrice() + getPriceAtSupply(supply - tokenAmount)) / 2;
-            return (tokenAmount * avgPrice) / 1e18;
-        }
+        // Use average price for fairer calculation
+        uint256 currentPrice = getCurrentPrice();
+        uint256 priceAfterSell = getPriceAtSupply(supply - tokenAmount);
+        uint256 avgPrice = (currentPrice + priceAfterSell) / 2;
+        
+        if (avgPrice == 0) return 0;
+        
+        // MATIC = tokens * price
+        return (tokenAmount * avgPrice) / 1e18;
     }
     
     /**
@@ -222,24 +218,30 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
     
     /**
      * @notice Get price at specific supply
+     * @dev Price increases with supply based on curve type
      */
     function getPriceAtSupply(uint256 supply) public view returns (uint256) {
         if (supply == 0) return initialPrice;
         
         if (curveType == CurveType.LINEAR) {
             // Linear: price = initialPrice + (supply * slope)
-            return initialPrice + (supply * LINEAR_SLOPE / 1e18);
+            // Slope is per token, supply is in wei (1e18 per token)
+            uint256 priceIncrease = (supply * LINEAR_SLOPE) / 1e18;
+            return initialPrice + priceIncrease;
         } else if (curveType == CurveType.EXPONENTIAL) {
-            // Exponential: price = initialPrice * (1.001 ^ supply)
-            // Simplified: price ≈ initialPrice * (1 + 0.001 * supply)
-            return initialPrice + (initialPrice * supply / 1000);
+            // Exponential: price increases faster with supply
+            // price ≈ initialPrice * (1 + 0.001 * supply_in_tokens)
+            uint256 supplyInTokens = supply / 1e18;
+            uint256 priceIncrease = (initialPrice * supplyInTokens) / 1000;
+            return initialPrice + priceIncrease;
         } else {
-            // Sigmoid: simplified linear growth with saturation
+            // Sigmoid: slow start, fast middle, slow end
             uint256 midpoint = 1000000 * 1e18; // 1M tokens
             if (supply < midpoint) {
-                return initialPrice + (initialPrice * supply / midpoint);
+                uint256 priceIncrease = (initialPrice * supply) / midpoint;
+                return initialPrice + priceIncrease;
             } else {
-                return initialPrice * 2; // Saturates at 2x initial price
+                return initialPrice * 2; // Saturates at 2x
             }
         }
     }
@@ -296,6 +298,35 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
             totalBuys,
             totalSells
         );
+    }
+    
+    /**
+     * @notice Graduate token - mint tokens and transfer liquidity to factory for DEX listing
+     * @dev Only callable by factory contract
+     */
+    function graduate() external nonReentrant returns (uint256 tokenAmount, uint256 maticAmount) {
+        require(msg.sender == factory, "Only factory can graduate");
+        require(address(this).balance > 0, "No liquidity to graduate");
+        
+        // Get MATIC amount
+        maticAmount = address(this).balance;
+        
+        // Mint equivalent tokens for liquidity (matching the MATIC value)
+        // This creates the initial liquidity pair
+        tokenAmount = maticAmount * 1000; // 1000 tokens per MATIC for initial liquidity
+        _mint(factory, tokenAmount);
+        
+        // Transfer all MATIC to factory
+        payable(factory).transfer(maticAmount);
+        
+        return (tokenAmount, maticAmount);
+    }
+    
+    /**
+     * @notice Get graduation readiness
+     */
+    function canGraduate() external view returns (bool) {
+        return address(this).balance >= 100 ether; // 100 MATIC threshold
     }
     
     receive() external payable {}

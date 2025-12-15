@@ -4,20 +4,20 @@
 import { useReadContract, useWriteContract } from 'wagmi';
 import { parseEther } from 'viem';
 import { contractAddresses, CurveType } from '@/config/contracts-v2';
-import BondingCurveFactoryV2ABI from '@/config/abis/BondingCurveFactoryV2.json';
+import BondingCurveFactoryV3ABI from '@/config/abis/BondingCurveFactoryV3.json';
 
 export function useBondingCurveFactory() {
   // Read total tokens
   const { data: totalTokens } = useReadContract({
     address: contractAddresses.bondingCurveFactory as `0x${string}`,
-    abi: BondingCurveFactoryV2ABI,
+    abi: BondingCurveFactoryV3ABI,
     functionName: 'getTotalTokens',
   });
 
   // Read creation fee
   const { data: creationFee } = useReadContract({
     address: contractAddresses.bondingCurveFactory as `0x${string}`,
-    abi: BondingCurveFactoryV2ABI,
+    abi: BondingCurveFactoryV3ABI,
     functionName: 'creationFee',
   });
 
@@ -30,7 +30,7 @@ export function useBondingCurveFactory() {
 export function useGetTokenInfo(tokenAddress: string) {
   const { data: tokenInfo, isLoading } = useReadContract({
     address: contractAddresses.bondingCurveFactory as `0x${string}`,
-    abi: BondingCurveFactoryV2ABI,
+    abi: BondingCurveFactoryV3ABI,
     functionName: 'getTokenInfo',
     args: [tokenAddress],
     query: {
@@ -47,7 +47,7 @@ export function useGetTokenInfo(tokenAddress: string) {
 export function useGetCreatorTokens(creatorAddress: string) {
   const { data: tokens, isLoading, refetch } = useReadContract({
     address: contractAddresses.bondingCurveFactory as `0x${string}`,
-    abi: BondingCurveFactoryV2ABI,
+    abi: BondingCurveFactoryV3ABI,
     functionName: 'getCreatorTokens',
     args: [creatorAddress],
     query: {
@@ -62,28 +62,29 @@ export function useGetCreatorTokens(creatorAddress: string) {
   };
 }
 
-export function useRegisterToken() {
+export function useCreateToken() {
   const { writeContract, isPending, isSuccess, data } = useWriteContract();
 
-  const registerToken = (
-    tokenAddress: string,
+  const createToken = (
     name: string,
     symbol: string,
     curveType: CurveType,
     initialPrice: string,
+    creatorRoyalty: number,
+    metadata: string,
     creationFee: string
   ) => {
     writeContract({
       address: contractAddresses.bondingCurveFactory as `0x${string}`,
-      abi: BondingCurveFactoryV2ABI,
-      functionName: 'registerToken',
-      args: [tokenAddress, name, symbol, curveType, parseEther(initialPrice)],
+      abi: BondingCurveFactoryV3ABI,
+      functionName: 'createToken',
+      args: [name, symbol, curveType, parseEther(initialPrice), creatorRoyalty, metadata],
       value: parseEther(creationFee),
     });
   };
 
   return {
-    registerToken,
+    createToken,
     isLoading: isPending,
     isSuccess,
     data,
@@ -94,5 +95,5 @@ export default {
   useBondingCurveFactory,
   useGetTokenInfo,
   useGetCreatorTokens,
-  useRegisterToken,
+  useCreateToken,
 };
