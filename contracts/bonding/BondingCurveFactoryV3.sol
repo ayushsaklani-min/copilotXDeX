@@ -299,7 +299,8 @@ contract BondingCurveFactoryV3 is Ownable, ReentrancyGuard {
     function withdrawFees() external onlyOwner {
         uint256 balance = address(this).balance;
         require(balance > 0, "No fees to withdraw");
-        payable(owner()).transfer(balance);
+        (bool success, ) = payable(owner()).call{value: balance}("");
+        require(success, "Withdrawal failed");
     }
     
     receive() external payable {}

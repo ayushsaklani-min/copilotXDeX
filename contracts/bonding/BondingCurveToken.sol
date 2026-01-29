@@ -94,7 +94,7 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         // Update factory stats (best-effort only, never break trading)
         uint256 currentPrice = getCurrentPrice();
         uint256 tvl = address(this).balance;
-        uint256 marketCap = totalSupply() * currentPrice / 1e18;
+        uint256 marketCap = (totalSupply() * currentPrice) / 1e18;
 
         if (factory != address(0)) {
             // If the factory call fails (e.g. token not registered), ignore it so buys still work
@@ -145,18 +145,21 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         totalSells++;
         
         // Transfer MATIC to seller
-        payable(msg.sender).transfer(amountAfterFee);
+        (bool success, ) = payable(msg.sender).call{value: amountAfterFee}("");
+        require(success, "Transfer failed");
         
         // Pay creator royalty
         if (creatorFeeAmount > 0) {
-            payable(creator).transfer(creatorFeeAmount);
-            emit CreatorRoyaltyPaid(creator, creatorFeeAmount);
+            (bool cSuccess, ) = payable(creator).call{value: creatorFeeAmount}("");
+            if (cSuccess) {
+                emit CreatorRoyaltyPaid(creator, creatorFeeAmount);
+            }
         }
         
         // Update factory stats (best-effort only, never break trading)
         uint256 currentPrice = getCurrentPrice();
         uint256 tvl = address(this).balance;
-        uint256 marketCap = totalSupply() * currentPrice / 1e18;
+        uint256 marketCap = (totalSupply() * currentPrice) / 1e18;
 
         if (factory != address(0)) {
             // If the factory call fails (e.g. token not registered), ignore it so sells still work
@@ -185,9 +188,14 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         uint256 currentPrice = getCurrentPrice();
         if (currentPrice == 0) return 0;
         
-        // Simple calculation: tokens = MATIC / price
-        // Price is in wei per token, so we need to scale properly
-        return (maticAmount * 1e18) / currentPrice;
+        // Initial estimate based on current price
+        uint256 tokens = (maticAmount * 1e18) / currentPrice;
+        
+        // Refine using average price: tokens = MATIC / ((priceAtStart + priceAtEnd) / 2)
+        uint256 priceAtEnd = getPriceAtSupply(totalSupply() + tokens);
+        uint256 avgPrice = (currentPrice + priceAtEnd) / 2;
+        
+        return (maticAmount * 1e18) / avgPrice;
     }
     
     /**
@@ -250,18 +258,16 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
      * @notice Take fees from trade amount
      */
     function _takeFees(uint256 amount, bool isBuy) internal returns (uint256) {
-        uint256 totalFeeAmount = (amount * TOTAL_FEE) / FEE_DENOMINATOR;
         uint256 creatorFeeAmount = (amount * creatorRoyalty * 100) / FEE_DENOMINATOR;
-        uint256 protocolFeeAmount = (amount * PROTOCOL_FEE) / FEE_DENOMINATOR;
         
-        // Pay creator royalty
         if (creatorFeeAmount > 0) {
-            payable(creator).transfer(creatorFeeAmount);
-            emit CreatorRoyaltyPaid(creator, creatorFeeAmount);
+            (bool success, ) = payable(creator).call{value: creatorFeeAmount}("");
+            if (success) {
+                emit CreatorRoyaltyPaid(creator, creatorFeeAmount);
+            }
         }
         
-        // Protocol fee stays in contract (becomes liquidity)
-        
+        uint256 totalFeeAmount = (amount * TOTAL_FEE) / FEE_DENOMINATOR;
         return amount - totalFeeAmount - creatorFeeAmount;
     }
     
@@ -312,12 +318,12 @@ contract BondingCurveToken is ERC20, ReentrancyGuard {
         maticAmount = address(this).balance;
         
         // Mint equivalent tokens for liquidity (matching the MATIC value)
-        // This creates the initial liquidity pair
-        tokenAmount = maticAmount * 1000; // 1000 tokens per MATIC for initial liquidity
+        tokenAmount = maticAmount * 1000; 
         _mint(factory, tokenAmount);
         
         // Transfer all MATIC to factory
-        payable(factory).transfer(maticAmount);
+        (bool success, ) = payable(factory).call{value: maticAmount}("");
+        require(success, "Graduation transfer failed");
         
         return (tokenAmount, maticAmount);
     }

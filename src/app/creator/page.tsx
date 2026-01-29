@@ -16,7 +16,7 @@ export default function CreatorDashboard() {
   const { address } = useAccount();
   const { creationFee } = useBondingCurveFactory();
   const { tokens: creatorTokens, isLoading: isLoadingTokens, refetch } = useGetCreatorTokens(address || '');
-  
+
   // Form state
   const [tokenName, setTokenName] = useState('');
   const [tokenSymbol, setTokenSymbol] = useState('');
@@ -34,11 +34,11 @@ export default function CreatorDashboard() {
   const [deployedAddress, setDeployedAddress] = useState<string>('');
   const [localTokens, setLocalTokens] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
-  
+
   const publicClient = usePublicClient();
   const { createToken, isLoading: isCreating, isSuccess: isCreateSuccess, data: createTxHash } = useCreateToken();
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   const shortAccount = address ? formatAddress(address) : '';
   const creationFeeValue = creationFee ? BigInt(creationFee) : 0n;
   const creationFeeDisplay = creationFeeValue ? Number(formatEther(creationFeeValue)).toFixed(3) : '0.000';
@@ -84,7 +84,7 @@ export default function CreatorDashboard() {
       return next;
     });
   };
-  
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -93,15 +93,15 @@ export default function CreatorDashboard() {
         alert('Please upload an image file (PNG, JPG, GIF)');
         return;
       }
-      
+
       // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
         alert('Image size must be less than 5MB');
         return;
       }
-      
+
       setImageFile(file);
-      
+
       // Create preview URL
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -110,18 +110,18 @@ export default function CreatorDashboard() {
       reader.readAsDataURL(file);
     }
   };
-  
+
   const removeImage = () => {
     setTokenImage(null);
     setImageFile(null);
   };
-  
+
   const handleCreateToken = async () => {
     if (!address) {
       alert('Please connect your wallet first');
       return;
     }
-    
+
     if (!tokenName || !tokenSymbol || !initialPrice) {
       alert('Please fill in all required fields');
       return;
@@ -139,13 +139,13 @@ export default function CreatorDashboard() {
       initialPrice,
       creatorRoyalty: royaltyInt,
     });
-    
+
     try {
       setIsProcessing(true);
       setStatus({ message: 'Creating your bonding curve token...', type: 'info' });
 
       const creationFeeDisplay = creationFeeValue ? formatEther(creationFeeValue) : '0.01';
-      
+
       // Call factory.createToken directly
       createToken(
         tokenName,
@@ -160,14 +160,14 @@ export default function CreatorDashboard() {
       // Wait for transaction
       if (createTxHash && publicClient) {
         setStatus({ message: 'Waiting for confirmation...', type: 'info' });
-        
+
         const receipt = await publicClient.waitForTransactionReceipt({
           hash: createTxHash,
         });
 
         // Parse TokenCreated event to get token address
         const factoryInterface = new ethers.Interface(BondingCurveFactoryV3ABI);
-        const tokenCreatedEvent = receipt.logs.find(log => {
+        const tokenCreatedEvent = receipt.logs.find((log: any) => {
           try {
             const parsed = factoryInterface.parseLog({
               topics: log.topics as string[],
@@ -185,7 +185,7 @@ export default function CreatorDashboard() {
             data: tokenCreatedEvent.data,
           });
           const tokenAddr = parsed?.args?.tokenAddress;
-          
+
           if (tokenAddr) {
             setDeployedAddress(tokenAddr);
             addLocalToken(tokenAddr);
@@ -193,7 +193,7 @@ export default function CreatorDashboard() {
               message: 'Token created successfully! 🎉',
               type: 'success',
             });
-            
+
             if (refetch) {
               await refetch();
             }
@@ -202,9 +202,9 @@ export default function CreatorDashboard() {
       }
     } catch (err: any) {
       console.error('Error:', err);
-      setStatus({ 
-        message: `Error: ${err.message || 'Failed to create token'}`, 
-        type: 'error' 
+      setStatus({
+        message: `Error: ${err.message || 'Failed to create token'}`,
+        type: 'error'
       });
     } finally {
       setIsProcessing(false);
@@ -230,11 +230,10 @@ export default function CreatorDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
-                activeTab === tab.id
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${activeTab === tab.id
                   ? 'bg-primary-500 text-white'
                   : 'bg-dark-bg-secondary text-neutral-400 hover:bg-dark-bg-hover'
-              }`}
+                }`}
             >
               <tab.icon className="w-5 h-5" />
               {tab.label}
@@ -248,29 +247,29 @@ export default function CreatorDashboard() {
             <Card variant="elevated" padding="lg">
               <h2 className="text-2xl font-bold text-white mb-6">Create Bonding Curve Token</h2>
               <div className="space-y-4">
-                <Input 
-                  label="Token Name *" 
+                <Input
+                  label="Token Name *"
                   placeholder="My Awesome Token"
                   value={tokenName}
                   onChange={(e) => setTokenName(e.target.value)}
                 />
-                <Input 
-                  label="Token Symbol *" 
+                <Input
+                  label="Token Symbol *"
                   placeholder="MAT"
                   value={tokenSymbol}
                   onChange={(e) => setTokenSymbol(e.target.value)}
                 />
-                <Input 
-                  label="Initial Supply" 
-                  placeholder="1000000" 
+                <Input
+                  label="Initial Supply"
+                  placeholder="1000000"
                   type="number"
                   value={initialSupply}
                   onChange={(e) => setInitialSupply(e.target.value)}
                 />
-                
+
                 <div>
                   <label className="block text-sm text-neutral-400 mb-2">Curve Type</label>
-                  <select 
+                  <select
                     className="w-full bg-dark-bg-secondary border border-dark-border-primary rounded-lg px-4 py-3 text-white"
                     value={curveType}
                     onChange={(e) => setCurveType(Number(e.target.value) as CurveType)}
@@ -281,9 +280,9 @@ export default function CreatorDashboard() {
                   </select>
                 </div>
 
-                <Input 
-                  label="Initial Price (MATIC) *" 
-                  placeholder="0.001" 
+                <Input
+                  label="Initial Price (MATIC) *"
+                  placeholder="0.001"
                   type="number"
                   value={initialPrice}
                   onChange={(e) => setInitialPrice(e.target.value)}
@@ -322,9 +321,9 @@ export default function CreatorDashboard() {
                     </label>
                   ) : (
                     <div className="relative border-2 border-primary-500 rounded-lg p-4">
-                      <img 
-                        src={tokenImage} 
-                        alt="Token preview" 
+                      <img
+                        src={tokenImage}
+                        alt="Token preview"
                         className="w-32 h-32 mx-auto rounded-full object-cover"
                       />
                       <button
@@ -341,26 +340,26 @@ export default function CreatorDashboard() {
                   )}
                 </div>
 
-                <Input 
-                  label="Description (Optional)" 
+                <Input
+                  label="Description (Optional)"
                   placeholder="Tell us about your token..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
-                <Input 
-                  label="Website (Optional)" 
+                <Input
+                  label="Website (Optional)"
                   placeholder="https://..."
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                 />
-                <Input 
-                  label="Twitter (Optional)" 
+                <Input
+                  label="Twitter (Optional)"
                   placeholder="https://twitter.com/..."
                   value={twitter}
                   onChange={(e) => setTwitter(e.target.value)}
                 />
-                <Input 
-                  label="Telegram (Optional)" 
+                <Input
+                  label="Telegram (Optional)"
                   placeholder="https://t.me/..."
                   value={telegram}
                   onChange={(e) => setTelegram(e.target.value)}
@@ -373,16 +372,14 @@ export default function CreatorDashboard() {
                 )}
 
                 {status.message && (
-                  <div className={`p-4 rounded-lg border ${
-                    status.type === 'error' ? 'bg-error-500/10 border-error-500' :
-                    status.type === 'success' ? 'bg-success-500/10 border-success-500' :
-                    'bg-primary-500/10 border-primary-500'
-                  }`}>
-                    <p className={`text-sm text-center ${
-                      status.type === 'error' ? 'text-error-500' :
-                      status.type === 'success' ? 'text-success-500' :
-                      'text-primary-500'
-                    }`}>{status.message}</p>
+                  <div className={`p-4 rounded-lg border ${status.type === 'error' ? 'bg-error-500/10 border-error-500' :
+                      status.type === 'success' ? 'bg-success-500/10 border-success-500' :
+                        'bg-primary-500/10 border-primary-500'
+                    }`}>
+                    <p className={`text-sm text-center ${status.type === 'error' ? 'text-error-500' :
+                        status.type === 'success' ? 'text-success-500' :
+                          'text-primary-500'
+                      }`}>{status.message}</p>
                   </div>
                 )}
 
@@ -408,9 +405,9 @@ export default function CreatorDashboard() {
 
 
 
-                <Button 
-                  variant="primary" 
-                  size="lg" 
+                <Button
+                  variant="primary"
+                  size="lg"
                   fullWidth
                   onClick={handleCreateToken}
                   disabled={
@@ -432,9 +429,9 @@ export default function CreatorDashboard() {
                 <h3 className="text-xl font-bold text-white mb-4">Preview</h3>
                 <div className="space-y-4">
                   {tokenImage ? (
-                    <img 
-                      src={tokenImage} 
-                      alt="Token" 
+                    <img
+                      src={tokenImage}
+                      alt="Token"
                       className="w-24 h-24 rounded-full mx-auto object-cover border-2 border-primary-500"
                     />
                   ) : (

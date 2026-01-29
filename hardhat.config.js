@@ -21,13 +21,25 @@ module.exports = {
         if (!pk) return [];
         pk = pk.trim();
         if (!pk.startsWith('0x')) pk = '0x' + pk;
-        // Keep only 0x + 64 hex chars
         if (pk.length > 66) pk = pk.slice(0, 66);
         return [pk];
       })(),
       chainId: 80002,
-      gasPrice: 30000000000, // 30 gwei to meet min tip cap
+      gasPrice: 30000000000,
       timeout: 90000,
+    },
+    polygon: {
+      url: process.env.RPC_URL || "https://polygon-rpc.com/",
+      accounts: (() => {
+        let pk = process.env.PRIVATE_KEY || '';
+        if (!pk) return [];
+        pk = pk.trim();
+        if (!pk.startsWith('0x')) pk = '0x' + pk;
+        if (pk.length > 66) pk = pk.slice(0, 66);
+        return [pk];
+      })(),
+      chainId: 137,
+      gasPrice: "auto",
     },
     hardhat: {
       chainId: 1337,

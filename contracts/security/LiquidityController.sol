@@ -149,7 +149,8 @@ contract LiquidityController is Ownable, ReentrancyGuard {
         rewardPool -= rewards;
         
         // Transfer rewards (in MATIC)
-        payable(msg.sender).transfer(rewards);
+        (bool success, ) = payable(msg.sender).call{value: rewards}("");
+        require(success, "Reward transfer failed");
     }
     
     /**
@@ -352,20 +353,5 @@ contract LiquidityController is Ownable, ReentrancyGuard {
         }
         
         return (found, total, pct);
-    }
-    
-    /**
-     * @notice Emergency unlock by owner (for emergencies only)
-     */
-    function ownerEmergencyUnlock(address token, uint256 lockId) external onlyOwner {
-        require(lockId < tokenLocks[token].length, "Invalid lock ID");
-        
-        LockInfo storage lock = tokenLocks[token][lockId];
-        require(!lock.isUnlocked, "Already unlocked");
-        
-        lock.isUnlocked = true;
-        IERC20(lock.lpToken).transfer(lock.owner, lock.amount);
-        
-        emit LiquidityUnlocked(token, lock.lpToken, lock.owner, lock.amount);
     }
 }

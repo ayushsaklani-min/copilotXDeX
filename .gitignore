@@ -109,7 +109,9 @@ tsconfig.tsbuildinfo
 tmp/
 temp/
 
-# Local deployment files
+# Deployment scripts and data (User Requested Exclusion)
+scripts/
+deployment-mainnet.json
 deploy-report.json
 deploy-factory.json
 *-deployment.json
